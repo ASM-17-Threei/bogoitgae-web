@@ -1,0 +1,28 @@
+name: Notify bogo-dog
+
+# main / develop 에 push 되면 통합 레포(bogo-dog)에 알려
+# 같은 이름의 브랜치에서 이 서브모듈 포인터를 최신 커밋으로 올리게 한다.
+on:
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send repository_dispatch to ASM-17-Threei/bogo-dog
+        env:
+          GH_TOKEN: ${{ secrets.BOGO_DOG_SYNC_TOKEN }}
+          REPO: ${{ github.event.repository.name }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          gh api --method POST repos/ASM-17-Threei/bogo-dog/dispatches \
+            -f event_type=submodule-update \
+            -F "client_payload[repo]=$REPO" \
+            -F "client_payload[branch]=$BRANCH" \
+            -F "client_payload[sha]=$SHA"
+          echo "dispatched: $REPO@$BRANCH ($SHA)"
