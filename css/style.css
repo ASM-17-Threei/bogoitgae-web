@@ -30,7 +30,7 @@ body {
 }
 img { max-width: 100%; display: block; }
 a { color: inherit; text-decoration: none; }
-h1, h2, h3 { font-family: var(--head); font-weight: 800; margin: 0; line-height: 1.28; letter-spacing: -0.01em; }
+h1, h2, h3 { font-family: var(--head); font-weight: 800; margin: 0; line-height: 1.22; letter-spacing: -0.025em; }
 p { margin: 0; }
 
 .wrap { max-width: var(--maxw); margin: 0 auto; padding-inline: var(--pad); }
@@ -101,8 +101,8 @@ p { margin: 0; }
   content: ""; position: absolute; inset: 0;
   background: linear-gradient(to top, rgba(15,19,14,.92) 6%, rgba(15,19,14,0) 55%);
 }
-.hero__inner { position: relative; padding-bottom: clamp(56px, 9vw, 104px); max-width: 720px; }
-.hero h1 { font-size: clamp(30px, 5.4vw, 50px); margin: 18px 0 16px; }
+.hero__inner { position: relative; padding-bottom: clamp(56px, 9vw, 104px); max-width: 840px; } /* 58px 타이틀 2줄 유지 폭 — 좁으면 고아 줄바꿈 */
+.hero h1 { font-size: clamp(32px, 6vw, 58px); margin: 18px 0 16px; }
 .hero p { max-width: 460px; color: #D6D5CB; font-size: clamp(14px, 1.4vw, 16px); }
 
 /* ---------- DETECT ---------- */
@@ -203,6 +203,31 @@ p { margin: 0; }
 .doc__body th { background: #EDE7D8; font-weight: 700; }
 .doc__note { background: #EDE7D8; border-radius: 14px; padding: 18px 20px; font-size: 14px; color: var(--mut-l); }
 .doc__updated { color: var(--mut-l); font-size: 13px; margin-top: 4px; }
+
+/* ---------- 디테일(호버·포커스·그레인) ---------- */
+.fcard { transition: transform .35s cubic-bezier(.22,1,.36,1), box-shadow .35s ease; }
+.fcard:hover { transform: translateY(-4px); box-shadow: 0 18px 40px -18px rgba(28,28,23,.18); }
+
+.chip { transition: transform .3s cubic-bezier(.22,1,.36,1), border-color .3s ease; }
+.chip:hover { transform: translateY(-3px); border-color: var(--sage); }
+
+.btn { transition: transform .25s ease, opacity .25s ease; }
+.btn:hover { transform: translateY(-2px); opacity: .92; }
+.btn:active { transform: translateY(0) scale(.98); } /* 촉각 피드백 — 눌리는 느낌 */
+
+.nav__links a { transition: opacity .2s ease; }
+
+/* 포커스 상태 (키보드 접근성) */
+a:focus-visible, summary:focus-visible, .btn:focus-visible {
+  outline: 2px solid var(--sage); outline-offset: 3px; border-radius: 4px;
+}
+
+/* 히어로 필름 그레인 */
+.hero::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.hero__inner { z-index: 1; }
 
 /* ---------- 푸터 ---------- */
 .footer { background: var(--black); color: var(--ink-d); padding: 56px var(--pad) 40px; }
