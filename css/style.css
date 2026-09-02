@@ -88,7 +88,7 @@ p { margin: 0; }
   color: var(--ink-d); overflow: hidden; background: var(--black);
 }
 .hero__bg {
-  position: absolute; inset: 0;
+  position: absolute; top: -12%; right: 0; bottom: 0; left: 0; /* 패럴랙스(yPercent:12)로 내려가도 위 가장자리 안 드러나게 여유분 */
   background: url("../assets/hero-living-room.jpg") center 35% / cover no-repeat;
 }
 /* 원형 비네트(포트홀) + 하단 셰이드 */
@@ -214,6 +214,12 @@ p { margin: 0; }
 .btn { transition: transform .25s ease, opacity .25s ease; }
 .btn:hover { transform: translateY(-2px); opacity: .92; }
 .btn:active { transform: translateY(0) scale(.98); } /* 촉각 피드백 — 눌리는 느낌 */
+
+/* JS 가드만으론 CSS 트랜지션·smooth scroll이 남음 — 전정기관 민감 사용자에겐 페이지 스크롤 애니가 특히 문제 */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .fcard, .chip, .btn, .nav, .nav__links a { transition: none; }
+}
 
 /* 포커스 상태 (키보드 접근성) */
 a:focus-visible, summary:focus-visible, .btn:focus-visible {

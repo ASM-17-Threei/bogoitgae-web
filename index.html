@@ -164,7 +164,8 @@
     <h2 data-reveal>우리 아이 케어,<br />부담 없이 시작하세요.</h2>
     <p data-reveal>필요한 만큼 선택하는 케어 멤버십. 무료로 간편하게 시작할 수 있어요.</p>
     <!-- 스토어 출시 후 실제 마켓 URL로 교체 -->
-    <div class="btns" data-reveal>
+    <!-- 스토어 버튼·FAQ는 인터랙티브 요소라 data-reveal 제외 — visibility:hidden이면 탭 순서에서 빠짐 -->
+    <div class="btns">
       <a class="btn btn--dark" href="#"><svg class="ic" style="width:18px;height:18px"><use href="#i-apple"/></svg> App Store</a>
       <a class="btn btn--ghost" href="#"><svg class="ic" style="width:18px;height:18px"><use href="#i-play"/></svg> Google Play</a>
     </div>
@@ -175,7 +176,7 @@
 <section class="sec sec--cream" id="faq" style="padding-top:0">
   <div class="wrap center">
     <h2 data-reveal>자주 묻는 질문</h2>
-    <div class="faq" data-reveal>
+    <div class="faq">
       <details><summary>어떤 스마트폰으로 홈캠을 만들 수 있나요?<svg class="ic plus"><use href="#i-plus"/></svg></summary><p>안 쓰는 안드로이드/아이폰에 보고있개 앱을 설치하면 홈캠으로 사용할 수 있어요. 와이파이 연결과 충전만 되면 됩니다.</p></details>
       <details><summary>어떤 행동을 감지하나요?<svg class="ic plus"><use href="#i-plus"/></svg></summary><p>짖음·하울링·낑낑·긁기 등 소리 기반 이상행동을 온디바이스 AI로 감지하고, 관련 영상을 함께 기록합니다.</p></details>
       <details><summary>녹화된 영상은 어디에 저장되나요?<svg class="ic plus"><use href="#i-plus"/></svg></summary><p>이벤트 클립은 암호화된 클라우드(AWS S3)에 안전하게 저장되며, 요금제에 따라 보관 기간이 정해집니다. 만료된 클립은 자동 삭제됩니다.</p></details>

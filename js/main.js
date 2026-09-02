@@ -1,7 +1,8 @@
 /* 보고있개 — GSAP 모션 (은은한 프리미엄 톤) */
 (function () {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  if (typeof gsap === "undefined") return; // CDN 실패 시 정적 사이트로 동작
+  // ScrollTrigger만 따로 실패해도(요청·SRI 별개) registerPlugin이 던지기 전에 빠져야 함
+  if (typeof gsap === "undefined" || typeof ScrollTrigger === "undefined") return; // CDN 실패 시 정적 사이트로 동작
 
   gsap.registerPlugin(ScrollTrigger);
   document.documentElement.classList.add("has-motion");
