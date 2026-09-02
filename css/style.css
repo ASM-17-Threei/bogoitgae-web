@@ -238,4 +238,4 @@ a:focus-visible, summary:focus-visible, .btn:focus-visible {
 .footer__links a { font-size: 13px; font-weight: 500; color: #C7C8BC; }
 .footer__links a:hover { color: #fff; }
 .footer__cr { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line-d);
-  color: #6E7065; font-size: 12px; }
+  color: #8B8D80; font-size: 12px; } /* #6E7065는 다크 배경 대비 4.5:1 미달(WCAG AA) */
