@@ -29,4 +29,35 @@
     ease: "none",
     scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: true }
   });
+
+  // ---------- 스크롤 리빌 (한 번만 재생) ----------
+  document.querySelectorAll("[data-reveal]").forEach(function (el) {
+    gsap.from(el, {
+      y: 28, autoAlpha: 0, duration: 0.8, ease: "power2.out",
+      scrollTrigger: { trigger: el, start: "top 82%", once: true }
+    });
+  });
+
+  // ---------- 스태거 그룹 (칩·기능 카드) ----------
+  document.querySelectorAll("[data-stagger]").forEach(function (wrap) {
+    gsap.from(wrap.children, {
+      y: 22, autoAlpha: 0, duration: 0.6, stagger: 0.07, ease: "power2.out",
+      scrollTrigger: { trigger: wrap, start: "top 85%", once: true }
+    });
+  });
+
+  // ---------- 레이더 링 무한 펄스 (1~3번째 링, 4번째는 중심 점) ----------
+  gsap.utils.toArray(".radar span:nth-child(-n+3)").forEach(function (ring, i) {
+    gsap.fromTo(ring,
+      { scale: 0.86, opacity: 0.9 },
+      { scale: 1.06, opacity: 0.2, duration: 2.4, repeat: -1, delay: i * 0.8, ease: "sine.out" }
+    );
+  });
+
+  // ---------- 네비 축소 ----------
+  ScrollTrigger.create({
+    start: 80,
+    end: "max", // end 생략 시 기본 end 지점 지나면 toggleClass가 풀려 페이지 하단에서 네비가 원복됨
+    toggleClass: { targets: ".nav", className: "nav--scrolled" }
+  });
 })();

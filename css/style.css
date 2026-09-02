@@ -56,9 +56,15 @@ p { margin: 0; }
 .ic { width: 24px; height: 24px; stroke: currentColor; stroke-width: 1.8;
       fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
+/* 모션 활성 시에만 리빌 대상 선숨김 — JS 실패·reduced-motion이면 그대로 보임 */
+.has-motion [data-reveal],
+.has-motion [data-stagger] > * { visibility: hidden; }
+/* gsap autoAlpha가 visibility를 다시 켠다 */
+
 /* ---------- 네비 ---------- */
 .nav {
   position: sticky; top: 0; z-index: 50;
+  transition: padding .3s ease, background .3s ease;
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px var(--pad);
   background: rgba(15,19,14,0.72); backdrop-filter: blur(12px);
@@ -74,6 +80,7 @@ p { margin: 0; }
   font-size: 13px; font-weight: 700;
 }
 @media (max-width: 720px){ .nav__links { display: none; } }
+.nav--scrolled { padding-block: 10px; background: rgba(15,19,14,0.92); }
 
 /* ---------- 히어로 ---------- */
 .hero {
