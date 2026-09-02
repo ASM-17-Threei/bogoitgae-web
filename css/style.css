@@ -73,7 +73,7 @@ p { margin: 0; }
 }
 .nav__logo { font-family: var(--head); font-weight: 800; font-size: 22px; color: var(--ink-d); }
 .nav__links { display: flex; gap: 30px; align-items: center; }
-.nav__links a { font-size: 14px; font-weight: 500; color: #E8E7DE; opacity: .88; }
+.nav__links a { font-size: 14px; font-weight: 500; color: #E8E7DE; opacity: .88; transition: opacity .2s ease; }
 .nav__links a:hover { opacity: 1; }
 .nav__cta {
   padding: 9px 18px; border-radius: 999px; background: #fff; color: var(--black);
@@ -101,7 +101,7 @@ p { margin: 0; }
   content: ""; position: absolute; inset: 0;
   background: linear-gradient(to top, rgba(15,19,14,.92) 6%, rgba(15,19,14,0) 55%);
 }
-.hero__inner { position: relative; padding-bottom: clamp(56px, 9vw, 104px); max-width: 840px; } /* 58px 타이틀 2줄 유지 폭 — 좁으면 고아 줄바꿈 */
+.hero__inner { position: relative; z-index: 1; padding-bottom: clamp(56px, 9vw, 104px); max-width: 840px; } /* 58px 타이틀 2줄 유지 폭 — 좁으면 고아 줄바꿈. z-index는 그레인(.hero::after) 아래 깔리지 않게 */
 .hero h1 { font-size: clamp(32px, 6vw, 58px); margin: 18px 0 16px; }
 .hero p { max-width: 460px; color: #D6D5CB; font-size: clamp(14px, 1.4vw, 16px); }
 
@@ -215,8 +215,6 @@ p { margin: 0; }
 .btn:hover { transform: translateY(-2px); opacity: .92; }
 .btn:active { transform: translateY(0) scale(.98); } /* 촉각 피드백 — 눌리는 느낌 */
 
-.nav__links a { transition: opacity .2s ease; }
-
 /* 포커스 상태 (키보드 접근성) */
 a:focus-visible, summary:focus-visible, .btn:focus-visible {
   outline: 2px solid var(--sage); outline-offset: 3px; border-radius: 4px;
@@ -227,7 +225,6 @@ a:focus-visible, summary:focus-visible, .btn:focus-visible {
   content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .05;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-.hero__inner { z-index: 1; }
 
 /* ---------- 푸터 ---------- */
 .footer { background: var(--black); color: var(--ink-d); padding: 56px var(--pad) 40px; }
