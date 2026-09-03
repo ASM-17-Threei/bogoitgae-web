@@ -48,57 +48,30 @@ function randB64url(len) {
   return b64url(a);
 }
 
-async function s256(text) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return b64url(new Uint8Array(digest));
-}
-
-function kakaoAuthorizeUrl(state, codeChallenge) {
+function kakaoAuthorizeUrl(state) {
   const p = new URLSearchParams({
     client_id: ADMIN_CONFIG.KAKAO_CLIENT_ID,
     redirect_uri: ADMIN_CONFIG.REDIRECT_URI,
     response_type: 'code',
     scope: 'openid',
     state,
-    code_challenge: codeChallenge,
-    code_challenge_method: 'S256',
   });
   return `https://kauth.kakao.com/oauth/authorize?${p}`;
 }
 
-// state = 로그인 CSRF 방어, PKCE = 공개 클라이언트라 code 탈취 대비 (둘 다 sessionStorage 왕복)
-async function beginKakaoLogin() {
+// state = 로그인 CSRF 방어 (sessionStorage 왕복). code 탈취 방어는 백엔드의 client_secret이 담당.
+function beginKakaoLogin() {
   const state = randB64url(32);
-  const verifier = randB64url(64);
   sessionStorage.setItem('kakaoState', state);
-  sessionStorage.setItem('kakaoVerifier', verifier);
-  location.href = kakaoAuthorizeUrl(state, await s256(verifier));
+  location.href = kakaoAuthorizeUrl(state);
 }
 
-// 스펙 리스크: 이 교환이 브라우저 CORS에 막히면 백엔드 code 교환 엔드포인트가 플랜 B.
-async function exchangeCode(code, verifier) {
-  const res = await fetch('https://kauth.kakao.com/oauth/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: ADMIN_CONFIG.KAKAO_CLIENT_ID,
-      redirect_uri: ADMIN_CONFIG.REDIRECT_URI,
-      code,
-      code_verifier: verifier,
-    }),
-  });
-  if (!res.ok) throw new Error(`카카오 토큰 교환 실패 (${res.status})`);
-  const body = await res.json();
-  if (!body.id_token) throw new Error('id_token 없음 — 카카오 앱의 OpenID Connect 활성화 확인');
-  return body.id_token;
-}
-
-async function loginWithIdToken(idToken) {
-  const res = await fetch(`${ADMIN_CONFIG.API_BASE_URL}/auth/login`, {
+// 카카오 REST 키에 클라이언트 시크릿이 켜져 있어 code→id_token 교환은 백엔드만 가능 — code만 넘긴다
+async function loginWithCode(code) {
+  const res = await fetch(`${ADMIN_CONFIG.API_BASE_URL}/auth/login/kakao`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider: 'KAKAO', token: idToken }),
+    body: JSON.stringify({ code }),
   });
   const body = await res.json();
   if (!body.success) throw new Error(`로그인 실패: ${body.error.code}`);
@@ -141,12 +114,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (code) {
     history.replaceState(null, '', location.pathname); // code 재사용 방지
     const savedState = sessionStorage.getItem('kakaoState');
-    const verifier = sessionStorage.getItem('kakaoVerifier');
     sessionStorage.removeItem('kakaoState');
-    sessionStorage.removeItem('kakaoVerifier');
     try {
       if (!savedState || qs.get('state') !== savedState) throw new Error('state 불일치 — 로그인을 다시 시도하세요');
-      await loginWithIdToken(await exchangeCode(code, verifier));
+      await loginWithCode(code);
     } catch (e) {
       toast(e.message, true);
     }
@@ -248,8 +219,8 @@ function adminSelfCheck() {
   console.assert(el('td', null).textContent === '', 'null 처리 실패');
   console.assert(fmtDate(null) === '—', 'fmtDate null 실패');
   console.assert(fmtDate('2026-01-02T03:04:05Z').includes('2026'), 'fmtDate 파싱 실패');
-  const u = kakaoAuthorizeUrl('st', 'ch');
-  console.assert(u.startsWith('https://kauth.kakao.com/oauth/authorize?') && u.includes('scope=openid') && u.includes('state=st') && u.includes('code_challenge_method=S256'), '카카오 URL 실패');
+  const u = kakaoAuthorizeUrl('st');
+  console.assert(u.startsWith('https://kauth.kakao.com/oauth/authorize?') && u.includes('scope=openid') && u.includes('state=st'), '카카오 URL 실패');
   console.assert(b64url(new Uint8Array([251, 239])).indexOf('=') === -1, 'b64url 패딩 제거 실패');
   const savedFilters = S.filters;
   S.filters = { q: '멍', status: '' };
