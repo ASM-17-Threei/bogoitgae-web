@@ -32,20 +32,22 @@
 </section>
 
 <!-- 본화면 -->
-<main id="view-app" hidden>
-  <header class="topbar">
+<main id="view-app" class="layout" hidden>
+  <aside class="sidebar">
     <span class="brand">🐶 보고있개 관리자</span>
     <nav id="tab-nav">
-      <button data-tab="users" class="tab active">유저</button>
-      <button data-tab="feedbacks" class="tab">피드백</button>
-      <button data-tab="analyses" class="tab">이벤트 분석</button>
-      <button data-tab="notifications" class="tab">알림 로그</button>
+      <button data-tab="users" class="tab active">👤 유저</button>
+      <button data-tab="feedbacks" class="tab">📣 피드백</button>
+      <button data-tab="analyses" class="tab">🤖 이벤트 분석</button>
+      <button data-tab="notifications" class="tab">🔔 알림 로그</button>
     </nav>
     <button id="btn-logout" class="btn btn-sm">로그아웃</button>
-  </header>
-  <div id="filters" class="filters"></div>
-  <div id="table-wrap" class="table-wrap"></div>
-  <div id="pager" class="pager"></div>
+  </aside>
+  <div class="content">
+    <div id="filters" class="filters"></div>
+    <div id="table-wrap" class="table-wrap"></div>
+    <div id="pager" class="pager"></div>
+  </div>
 </main>
 
 <dialog id="detail"><div id="detail-body"></div></dialog>
