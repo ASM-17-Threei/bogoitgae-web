@@ -246,3 +246,152 @@ function adminSelfCheck() {
   console.assert(b64url(new Uint8Array([251, 239])).indexOf('=') === -1, 'b64url 패딩 제거 실패');
   console.log('adminSelfCheck 통과');
 }
+
+// ============ 탭 프레임 ============
+const S = { tab: 'users', page: 0, filters: {} };
+const TABS = {}; // 각 탭이 { load } 를 등록한다
+
+function switchTab(name) {
+  S.tab = name;
+  S.page = 0;
+  S.filters = {};
+  for (const b of document.querySelectorAll('#tab-nav .tab')) {
+    b.classList.toggle('active', b.dataset.tab === name);
+  }
+  TABS[name].load().catch(() => {});
+}
+
+function listQuery() {
+  const p = new URLSearchParams({ page: S.page, size: 20 });
+  for (const [k, v] of Object.entries(S.filters)) if (v) p.set(k, v);
+  return p.toString();
+}
+
+// defs: [{name, label, type:'text'|'select'|'date', options?}] — 적용 시 S.filters 갱신 후 reload
+function renderFilters(defs, extraNode) {
+  const box = document.getElementById('filters');
+  box.replaceChildren();
+  if (extraNode) box.append(extraNode);
+  const inputs = [];
+  for (const d of defs) {
+    let input;
+    if (d.type === 'select') {
+      input = el('select');
+      input.append(new Option(d.label + ' 전체', ''));
+      for (const o of d.options) input.append(new Option(o, o));
+    } else {
+      input = el('input');
+      input.type = d.type;
+      input.placeholder = d.label;
+    }
+    input.name = d.name;
+    inputs.push(input);
+    box.append(input);
+  }
+  const apply = el('button', '적용', 'btn btn-sm btn-primary');
+  apply.addEventListener('click', () => {
+    S.filters = Object.fromEntries(inputs.map((i) => [i.name, i.value]));
+    S.page = 0;
+    TABS[S.tab].load().catch(() => {});
+  });
+  box.append(apply);
+}
+
+function movePage(page) {
+  S.page = page;
+  TABS[S.tab].load().catch(() => {});
+}
+
+function openDialog(node) {
+  const body = document.getElementById('detail-body');
+  body.replaceChildren(node);
+  document.getElementById('detail').showModal();
+}
+
+function dl(pairs) {
+  const box = el('dl');
+  for (const [k, v] of pairs) box.append(el('dt', k), el('dd', v ?? '—'));
+  return box;
+}
+
+function subTable(title, cols, rows) {
+  const frag = document.createDocumentFragment();
+  frag.append(el('h2', title));
+  const table = el('table');
+  const hr = el('tr');
+  for (const c of cols) hr.append(el('th', c.label));
+  const thead = el('thead'); thead.append(hr);
+  const tbody = el('tbody');
+  if (rows.length === 0) {
+    const tr = el('tr'); const td = el('td', '없음', 'muted');
+    td.colSpan = cols.length; tr.append(td); tbody.append(tr);
+  }
+  for (const r of rows) {
+    const tr = el('tr');
+    for (const c of cols) tr.append(el('td', (c.fmt ? c.fmt(r[c.key]) : r[c.key]) ?? '—'));
+    tbody.append(tr);
+  }
+  table.append(thead, tbody);
+  frag.append(table);
+  return frag;
+}
+
+// ============ 유저 탭 ============
+const USER_STATUSES = ['ACTIVE', 'SUSPENDED', 'DELETED'];
+
+TABS.users = {
+  async load() {
+    renderFilters([
+      { name: 'q', label: '검색어', type: 'text' },
+      { name: 'status', label: '상태', type: 'select', options: USER_STATUSES },
+    ]);
+    const data = await api(`/admin/users?${listQuery()}`);
+    renderTable([
+      { key: 'id', label: 'ID' },
+      { key: 'nickname', label: '닉네임' },
+      { key: 'provider', label: '가입경로' },
+      { key: 'status', label: '상태' },
+      { key: 'role', label: '역할' },
+      { key: 'createdAt', label: '가입일', fmt: fmtDate },
+      { key: 'lastActiveAt', label: '최근 활동', fmt: fmtDate },
+    ], data.items, (row) => openUserDetail(row.id));
+    renderPager(data, movePage);
+  },
+};
+
+async function openUserDetail(userId) {
+  const u = await api(`/admin/users/${userId}`);
+  const frag = document.createDocumentFragment();
+  frag.append(el('h2', `유저 #${u.id} — ${u.nickname}`));
+  frag.append(dl([
+    ['가입경로', u.provider], ['상태', u.status], ['역할', u.role],
+    ['가입일', fmtDate(u.createdAt)],
+  ]));
+  frag.append(subTable('강아지', [
+    { key: 'id', label: 'ID' }, { key: 'name', label: '이름' }, { key: 'breed', label: '견종' },
+  ], u.dogs));
+  frag.append(subTable('카메라', [
+    { key: 'id', label: 'ID' }, { key: 'name', label: '이름' },
+    { key: 'pairedAt', label: '페어링', fmt: fmtDate },
+  ], u.cameras));
+
+  // 상태 변경 — 이 페이지의 유일한 쓰기 동작
+  const row = el('div', null, 'status-row');
+  const sel = el('select');
+  for (const s of USER_STATUSES) sel.append(new Option(s, s, false, s === u.status));
+  const btn = el('button', '상태 변경', 'btn btn-sm btn-primary');
+  btn.addEventListener('click', async () => {
+    if (sel.value === u.status) return toast('현재 상태와 동일합니다', true);
+    if (!confirm(`유저 #${u.id} 상태를 ${u.status} → ${sel.value} 로 변경할까요?`)) return;
+    await api(`/admin/users/${u.id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: sel.value }),
+    });
+    toast('상태가 변경되었습니다');
+    document.getElementById('detail').close();
+    TABS.users.load().catch(() => {});
+  });
+  row.append(sel, btn);
+  frag.append(row);
+  openDialog(frag);
+}
