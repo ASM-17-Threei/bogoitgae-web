@@ -195,9 +195,8 @@ function fmtDate(iso) {
   return iso ? new Date(iso).toLocaleString('ko-KR', { hour12: false }) : '—';
 }
 
-function renderTable(cols, rows, onRow) {
-  const wrap = document.getElementById('table-wrap');
-  wrap.replaceChildren();
+// 목록 화면(renderTable)과 상세 dialog(subTable)가 공유하는 테이블 빌더
+function buildTable(cols, rows, { onRow, emptyText = '데이터 없음' } = {}) {
   const table = el('table');
   const thead = el('thead');
   const hr = el('tr');
@@ -206,7 +205,7 @@ function renderTable(cols, rows, onRow) {
   const tbody = el('tbody');
   if (rows.length === 0) {
     const tr = el('tr');
-    const td = el('td', '데이터 없음', 'muted');
+    const td = el('td', emptyText, 'muted');
     td.colSpan = cols.length;
     tr.append(td);
     tbody.append(tr);
@@ -221,7 +220,12 @@ function renderTable(cols, rows, onRow) {
     tbody.append(tr);
   }
   table.append(thead, tbody);
-  wrap.append(table);
+  return table;
+}
+
+function renderTable(cols, rows, onRow) {
+  const wrap = document.getElementById('table-wrap');
+  wrap.replaceChildren(buildTable(cols, rows, { onRow }));
 }
 
 function renderPager(pageData, onMove) {
@@ -247,6 +251,14 @@ function adminSelfCheck() {
   const u = kakaoAuthorizeUrl('st', 'ch');
   console.assert(u.startsWith('https://kauth.kakao.com/oauth/authorize?') && u.includes('scope=openid') && u.includes('state=st') && u.includes('code_challenge_method=S256'), '카카오 URL 실패');
   console.assert(b64url(new Uint8Array([251, 239])).indexOf('=') === -1, 'b64url 패딩 제거 실패');
+  const savedFilters = S.filters;
+  S.filters = { q: '멍', status: '' };
+  console.assert(listQuery().includes('q=%EB%A9%8D') && !listQuery().includes('status'), 'listQuery 빈 필터 제외 실패');
+  S.filters = savedFilters;
+  const cols = [{ key: 'a', label: 'A' }];
+  console.assert(buildTable(cols, []).querySelector('td').textContent === '데이터 없음', 'buildTable 빈 목록 실패');
+  console.assert(buildTable(cols, [{ a: 1 }], { onRow: () => {} }).querySelector('tr.clickable') !== null, 'buildTable onRow 클래스 실패');
+  console.assert(buildTable(cols, [{ a: null }]).querySelector('tbody td').textContent === '—', 'buildTable null 대시 실패');
   console.log('adminSelfCheck 통과');
 }
 
@@ -288,6 +300,7 @@ function renderFilters(defs, extraNode) {
       input.placeholder = d.label;
     }
     input.name = d.name;
+    input.value = S.filters[d.name] || ''; // load()가 페이지 이동마다 재렌더해서, 복원 안 하면 적용 중인 필터가 UI에서 사라짐
     inputs.push(input);
     box.append(input);
   }
@@ -319,23 +332,7 @@ function dl(pairs) {
 
 function subTable(title, cols, rows) {
   const frag = document.createDocumentFragment();
-  frag.append(el('h2', title));
-  const table = el('table');
-  const hr = el('tr');
-  for (const c of cols) hr.append(el('th', c.label));
-  const thead = el('thead'); thead.append(hr);
-  const tbody = el('tbody');
-  if (rows.length === 0) {
-    const tr = el('tr'); const td = el('td', '없음', 'muted');
-    td.colSpan = cols.length; tr.append(td); tbody.append(tr);
-  }
-  for (const r of rows) {
-    const tr = el('tr');
-    for (const c of cols) tr.append(el('td', (c.fmt ? c.fmt(r[c.key]) : r[c.key]) ?? '—'));
-    tbody.append(tr);
-  }
-  table.append(thead, tbody);
-  frag.append(table);
+  frag.append(el('h2', title), buildTable(cols, rows, { emptyText: '없음' }));
   return frag;
 }
 
