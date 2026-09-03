@@ -132,6 +132,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-kakao').addEventListener('click', beginKakaoLogin);
   document.getElementById('btn-logout').addEventListener('click', logout);
   document.getElementById('btn-logout2').addEventListener('click', logout);
+  document.getElementById('tab-nav').addEventListener('click', (e) => {
+    if (e.target.dataset.tab) switchTab(e.target.dataset.tab);
+  });
 
   const qs = new URLSearchParams(location.search);
   const code = qs.get('code');
@@ -395,3 +398,110 @@ async function openUserDetail(userId) {
   frag.append(row);
   openDialog(frag);
 }
+
+// ============ 피드백 탭 ============
+TABS.feedbacks = {
+  async load() {
+    renderFilters([
+      { name: 'reasonCode', label: '신고 사유', type: 'select', options: ['NOT_DOG_SOUND', 'WRONG_CATEGORY', 'NORMAL_BEHAVIOR', 'ETC'] },
+    ]);
+    const data = await api(`/admin/feedbacks?${listQuery()}`);
+    renderTable([
+      { key: 'id', label: 'ID' },
+      { key: 'eventId', label: '이벤트' },
+      { key: 'eventCategory', label: '카테고리' },
+      { key: 'sourceType', label: '소스' },
+      { key: 'reasonCode', label: '사유' },
+      { key: 'detail', label: '내용', trunc: true },
+      { key: 'reporterNickname', label: '신고자' },
+      { key: 'createdAt', label: '신고일', fmt: fmtDate },
+    ], data.items, (row) => openFeedbackDetail(row.id));
+    renderPager(data, movePage);
+  },
+};
+
+async function openFeedbackDetail(feedbackId) {
+  const f = await api(`/admin/feedbacks/${feedbackId}`);
+  const frag = document.createDocumentFragment();
+  frag.append(el('h2', `피드백 #${f.id}`));
+  frag.append(dl([
+    ['이벤트', `#${f.eventId} ${f.eventCategory} (${f.sourceType})`],
+    ['신뢰도', f.confidence], ['길이(초)', f.durationSec],
+    ['감지 시각', fmtDate(f.detectedAt)],
+    ['신고 사유', f.reasonCode], ['내용', f.detail],
+    ['신고자', `#${f.reporterUserId} ${f.reporterNickname}`],
+    ['신고일', fmtDate(f.createdAt)],
+  ]));
+  if (f.playbackUrl) {
+    const a = el('a', '클립 재생 ↗');
+    a.href = f.playbackUrl;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    frag.append(a);
+  } else {
+    frag.append(el('p', '클립 없음 또는 만료', 'muted'));
+  }
+  openDialog(frag);
+}
+
+// ============ 이벤트 분석 탭 ============
+TABS.analyses = {
+  async load() {
+    renderFilters([
+      { name: 'severity', label: '심각도', type: 'select', options: ['LOW', 'MEDIUM', 'HIGH'] },
+      { name: 'from', label: '시작일', type: 'date' },
+      { name: 'to', label: '종료일', type: 'date' },
+    ]);
+    const data = await api(`/admin/event-analyses?${listQuery()}`);
+    renderTable([
+      { key: 'id', label: 'ID' },
+      { key: 'eventId', label: '이벤트' },
+      { key: 'clipId', label: '클립' },
+      { key: 'modelName', label: '모델' },
+      { key: 'promptVersion', label: '프롬프트' },
+      { key: 'verdict', label: '판정' },
+      { key: 'severity', label: '심각도' },
+      { key: 'summary', label: '요약', trunc: true },
+      { key: 'latencyMs', label: '지연(ms)' },
+      { key: 'tokenCost', label: '토큰비용' },
+      { key: 'analyzedAt', label: '분석 시각', fmt: fmtDate },
+    ], data.items);
+    renderPager(data, movePage);
+  },
+};
+
+// ============ 알림 로그 탭 ============
+let notifSub = 'reports'; // 'reports' | 'events'
+
+TABS.notifications = {
+  async load() {
+    const toggle = el('div');
+    for (const [key, label] of [['reports', '리포트'], ['events', '이벤트']]) {
+      const b = el('button', label, `btn btn-sm${notifSub === key ? ' btn-primary' : ''}`);
+      b.addEventListener('click', () => {
+        notifSub = key;
+        S.page = 0;
+        TABS.notifications.load().catch(() => {});
+      });
+      toggle.append(b);
+    }
+    renderFilters([
+      { name: 'status', label: '발송 상태', type: 'select', options: ['PENDING', 'SENT', 'FAILED'] },
+      { name: 'from', label: '시작일', type: 'date' },
+      { name: 'to', label: '종료일', type: 'date' },
+    ], toggle);
+    const data = await api(`/admin/notification-logs/${notifSub}?${listQuery()}`);
+    renderTable([
+      { key: 'id', label: 'ID' },
+      { key: 'userId', label: '유저' },
+      { key: notifSub === 'reports' ? 'reportId' : 'eventId', label: notifSub === 'reports' ? '리포트' : '이벤트' },
+      { key: 'channel', label: '채널' },
+      { key: 'title', label: '제목', trunc: true },
+      { key: 'body', label: '본문', trunc: true },
+      { key: 'status', label: '상태' },
+      { key: 'failReason', label: '실패 사유', trunc: true },
+      { key: 'sentAt', label: '발송 시각', fmt: fmtDate },
+    ], data.items);
+    renderPager(data, movePage);
+  },
+};
