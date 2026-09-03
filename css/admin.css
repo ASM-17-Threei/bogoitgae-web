@@ -1,0 +1,51 @@
+:root {
+  --ink: #2b2723; --sub: #7a716a; --line: #e7e0d8;
+  --bg: #faf7f2; --card: #fff; --accent: #b5835a; --bad: #b04a3f;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+/* .center-view의 display:flex가 hidden 속성(UA display:none)을 덮어써서 필요 */
+[hidden] { display: none !important; }
+body { font-family: "Noto Sans KR", sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; }
+h1 { font-family: "Gothic A1", sans-serif; font-weight: 800; }
+.muted { color: var(--sub); }
+button { font: inherit; cursor: pointer; }
+
+.center-view { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+.btn { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 10px 20px; }
+.btn-sm { padding: 5px 12px; }
+.btn-kakao { background: #fee500; border-color: #fee500; font-weight: 700; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.layout { display: flex; min-height: 100vh; }
+.sidebar { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 24px; padding: 20px 14px; background: var(--card); border-right: 1px solid var(--line); position: sticky; top: 0; height: 100vh; }
+.brand { font-weight: 800; font-family: "Gothic A1", sans-serif; padding: 0 10px; }
+#tab-nav { display: flex; flex-direction: column; gap: 4px; }
+.tab { border: 0; background: none; padding: 10px 12px; color: var(--sub); text-align: left; border-radius: 8px; border-left: 3px solid transparent; }
+.tab:hover { background: #f8f3ec; }
+.tab.active { color: var(--ink); background: #f3ede5; border-left-color: var(--accent); font-weight: 700; }
+#btn-logout { margin-top: auto; }
+.content { flex: 1; min-width: 0; }
+
+.filters { display: flex; gap: 8px; flex-wrap: wrap; padding: 20px 24px 6px; align-items: center; }
+.filters input, .filters select { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+
+.table-wrap { padding: 0 24px; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { background: #f3ede5; font-size: 12px; }
+td.trunc { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+tbody tr.clickable { cursor: pointer; }
+tbody tr.clickable:hover { background: #f8f3ec; }
+
+.pager { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 16px; }
+
+dialog { border: 1px solid var(--line); border-radius: 12px; padding: 24px; max-width: 640px; width: 90vw; max-height: 80vh; overflow-y: auto; }
+dialog::backdrop { background: rgba(43, 39, 35, .4); }
+dialog h2 { font-size: 16px; margin-bottom: 12px; }
+dialog dl { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; margin-bottom: 16px; }
+dialog dt { color: var(--sub); }
+dialog table { margin-bottom: 16px; }
+.status-row { display: flex; gap: 8px; align-items: center; }
+
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 8px; z-index: 10; }
+.toast.error { background: var(--bad); }
