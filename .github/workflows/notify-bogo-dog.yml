@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Send repository_dispatch to ASM-17-Threei/bogo-dog
+        if: ${{ secrets.BOGO_DOG_SYNC_TOKEN != '' }}
         env:
           GH_TOKEN: ${{ secrets.BOGO_DOG_SYNC_TOKEN }}
           REPO: ${{ github.event.repository.name }}
@@ -26,3 +27,6 @@ jobs:
             -F "client_payload[branch]=$BRANCH" \
             -F "client_payload[sha]=$SHA"
           echo "dispatched: $REPO@$BRANCH ($SHA)"
+      - name: Skip dispatch when secret is missing
+        if: ${{ secrets.BOGO_DOG_SYNC_TOKEN == '' }}
+        run: echo "::warning::BOGO_DOG_SYNC_TOKEN is not set, so repository_dispatch was skipped."
