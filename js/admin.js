@@ -429,11 +429,17 @@ async function openFeedbackDetail(feedbackId) {
     ['신고자', `#${f.reporterUserId} ${f.reporterNickname}`],
     ['신고일', fmtDate(f.createdAt)],
   ]));
-  if (f.playbackUrl) {
+  // href는 textContent 방어 밖이라 javascript: 스킴 차단이 별도로 필요
+  let safeUrl = null;
+  try {
+    const u = new URL(f.playbackUrl);
+    if (u.protocol === 'https:' || u.protocol === 'http:') safeUrl = u.href;
+  } catch { /* null·비URL이면 링크 미표시 */ }
+  if (safeUrl) {
     const a = el('a', '클립 재생 ↗');
-    a.href = f.playbackUrl;
+    a.href = safeUrl;
     a.target = '_blank';
-    a.rel = 'noopener';
+    a.rel = 'noopener noreferrer';
     frag.append(a);
   } else {
     frag.append(el('p', '클립 없음 또는 만료', 'muted'));
