@@ -3,6 +3,8 @@
   --bg: #faf7f2; --card: #fff; --accent: #b5835a; --bad: #b04a3f;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+/* .center-view의 display:flex가 hidden 속성(UA display:none)을 덮어써서 필요 */
+[hidden] { display: none !important; }
 body { font-family: "Noto Sans KR", sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; }
 h1 { font-family: "Gothic A1", sans-serif; font-weight: 800; }
 .muted { color: var(--sub); }
