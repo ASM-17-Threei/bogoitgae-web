@@ -108,6 +108,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('tab-nav').addEventListener('click', (e) => {
     if (e.target.dataset.tab) switchTab(e.target.dataset.tab);
   });
+  // 닫기 버튼이 없어서 백드롭 클릭으로 닫기 (Esc는 dialog 기본 지원)
+  const dlg = document.getElementById('detail');
+  dlg.addEventListener('click', (e) => {
+    if (e.target === dlg) dlg.close();
+  });
 
   const qs = new URLSearchParams(location.search);
   const code = qs.get('code');

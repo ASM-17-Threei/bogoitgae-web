@@ -39,7 +39,8 @@ tbody tr.clickable:hover { background: #f8f3ec; }
 
 .pager { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 16px; }
 
-dialog { border: 1px solid var(--line); border-radius: 12px; padding: 24px; max-width: 640px; width: 90vw; max-height: 80vh; overflow-y: auto; }
+/* margin:auto — 상단 * 리셋이 dialog UA 기본 가운데 정렬(margin:auto)을 지워서 복원 필요 */
+dialog { margin: auto; border: 1px solid var(--line); border-radius: 12px; padding: 24px; max-width: 640px; width: 90vw; max-height: 80vh; overflow-y: auto; box-shadow: 0 12px 32px rgba(43, 39, 35, .18); }
 dialog::backdrop { background: rgba(43, 39, 35, .4); }
 dialog h2 { font-size: 16px; margin-bottom: 12px; }
 dialog dl { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; margin-bottom: 16px; }
