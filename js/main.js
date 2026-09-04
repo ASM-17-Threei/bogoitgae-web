@@ -54,11 +54,4 @@
       { scale: 1.06, opacity: 0.2, duration: 2.4, repeat: -1, delay: i * 0.8, ease: "sine.out" }
     );
   });
-
-  // ---------- 네비 축소 ----------
-  ScrollTrigger.create({
-    start: 80,
-    end: "max", // end 생략 시 기본 end 지점 지나면 toggleClass가 풀려 페이지 하단에서 네비가 원복됨
-    toggleClass: { targets: ".nav", className: "nav--scrolled" }
-  });
 })();

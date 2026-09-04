@@ -61,27 +61,6 @@ p { margin: 0; }
 .has-motion [data-stagger] > * { visibility: hidden; }
 /* gsap autoAlpha가 visibility를 다시 켠다 */
 
-/* ---------- 네비 ---------- */
-.nav {
-  position: sticky; top: 0; z-index: 50;
-  transition: padding .3s ease, background .3s ease;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 18px var(--pad);
-  background: rgba(15,19,14,0.72); backdrop-filter: blur(12px);
-  color: var(--ink-d);
-  border-bottom: 1px solid var(--line-d);
-}
-.nav__logo { font-family: var(--head); font-weight: 800; font-size: 22px; color: var(--ink-d); }
-.nav__links { display: flex; gap: 30px; align-items: center; }
-.nav__links a { font-size: 14px; font-weight: 500; color: #E8E7DE; opacity: .88; transition: opacity .2s ease; }
-.nav__links a:hover { opacity: 1; }
-.nav__cta {
-  padding: 9px 18px; border-radius: 999px; background: #fff; color: var(--black);
-  font-size: 13px; font-weight: 700;
-}
-@media (max-width: 720px){ .nav__links { display: none; } }
-.nav--scrolled { padding-block: 10px; background: rgba(15,19,14,0.92); }
-
 /* ---------- 히어로 ---------- */
 .hero {
   position: relative; min-height: 88vh; display: flex; align-items: flex-end;
@@ -218,7 +197,7 @@ p { margin: 0; }
 /* JS 가드만으론 CSS 트랜지션·smooth scroll이 남음 — 전정기관 민감 사용자에겐 페이지 스크롤 애니가 특히 문제 */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .fcard, .chip, .btn, .nav, .nav__links a { transition: none; }
+  .fcard, .chip, .btn { transition: none; }
 }
 
 /* 포커스 상태 (키보드 접근성) */
