@@ -1,16 +1,37 @@
 'use strict';
 
+// ============ 환경 ============
+const savedEnvironment = localStorage.getItem('adminEnvironment');
+const environment = Object.hasOwn(ENVIRONMENTS, savedEnvironment) && ENVIRONMENTS[savedEnvironment]
+  ? savedEnvironment : 'develop';
+const API_BASE_URL = ENVIRONMENTS[environment];
+
+function renderEnvironment() {
+  const sel = document.getElementById('environment');
+  for (const [name, url] of Object.entries(ENVIRONMENTS)) {
+    const option = new Option(url ? name : `${name} (준비중)`, name, false, name === environment);
+    option.disabled = !url;
+    sel.append(option);
+  }
+  sel.addEventListener('change', () => {
+    if (!Object.hasOwn(ENVIRONMENTS, sel.value) || !ENVIRONMENTS[sel.value]) return;
+    localStorage.setItem('adminEnvironment', sel.value);
+    // 새 환경에서 다시 초기화 — 이전 환경의 요청·상세 화면이 섞이지 않게 한다
+    location.reload();
+  });
+}
+
 // ============ 토큰 저장 ============
 const tokens = {
-  get access() { return localStorage.getItem('adminAccessToken'); },
-  get refresh() { return localStorage.getItem('adminRefreshToken'); },
+  get access() { return localStorage.getItem(`${environment}:adminAccessToken`); },
+  get refresh() { return localStorage.getItem(`${environment}:adminRefreshToken`); },
   save(pair) {
-    localStorage.setItem('adminAccessToken', pair.accessToken);
-    localStorage.setItem('adminRefreshToken', pair.refreshToken);
+    localStorage.setItem(`${environment}:adminAccessToken`, pair.accessToken);
+    localStorage.setItem(`${environment}:adminRefreshToken`, pair.refreshToken);
   },
   clear() {
-    localStorage.removeItem('adminAccessToken');
-    localStorage.removeItem('adminRefreshToken');
+    localStorage.removeItem(`${environment}:adminAccessToken`);
+    localStorage.removeItem(`${environment}:adminRefreshToken`);
   },
 };
 
@@ -63,12 +84,13 @@ function kakaoAuthorizeUrl(state) {
 function beginKakaoLogin() {
   const state = randB64url(32);
   sessionStorage.setItem('kakaoState', state);
+  sessionStorage.setItem('kakaoEnvironment', environment);
   location.href = kakaoAuthorizeUrl(state);
 }
 
 // 카카오 REST 키에 클라이언트 시크릿이 켜져 있어 code→id_token 교환은 백엔드만 가능 — code만 넘긴다
 async function loginWithCode(code) {
-  const res = await fetch(`${ADMIN_CONFIG.API_BASE_URL}/auth/login/kakao`, {
+  const res = await fetch(`${API_BASE_URL}/auth/login/kakao`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code }),
@@ -81,7 +103,7 @@ async function loginWithCode(code) {
 async function tryRefresh() {
   if (!tokens.refresh) return false;
   try {
-    const res = await fetch(`${ADMIN_CONFIG.API_BASE_URL}/auth/refresh`, {
+    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: tokens.refresh }),
@@ -102,6 +124,7 @@ function logout() {
 
 // ============ 초기화 ============
 document.addEventListener('DOMContentLoaded', async () => {
+  renderEnvironment();
   document.getElementById('btn-kakao').addEventListener('click', beginKakaoLogin);
   document.getElementById('btn-logout').addEventListener('click', logout);
   document.getElementById('btn-logout2').addEventListener('click', logout);
@@ -119,9 +142,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (code) {
     history.replaceState(null, '', location.pathname); // code 재사용 방지
     const savedState = sessionStorage.getItem('kakaoState');
+    const loginEnvironment = sessionStorage.getItem('kakaoEnvironment');
     sessionStorage.removeItem('kakaoState');
+    sessionStorage.removeItem('kakaoEnvironment');
     try {
       if (!savedState || qs.get('state') !== savedState) throw new Error('state 불일치 — 로그인을 다시 시도하세요');
+      if (loginEnvironment !== environment) throw new Error('환경 변경 — 로그인을 다시 시도하세요');
       await loginWithCode(code);
     } catch (e) {
       toast(e.message, true);
@@ -133,8 +159,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // ============ API 래퍼 ============
 async function api(path, opts = {}, retried = false) {
-  const res = await fetch(ADMIN_CONFIG.API_BASE_URL + path, {
-    ...opts,
+  const { errorMessages = {}, ...fetchOpts } = opts;
+  const res = await fetch(API_BASE_URL + path, {
+    ...fetchOpts,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${tokens.access}`,
@@ -152,8 +179,10 @@ async function api(path, opts = {}, retried = false) {
   }
   const body = await res.json();
   if (!body.success) {
-    toast(`${body.error.code}: ${body.error.message}`, true);
-    throw new Error(body.error.code);
+    toast(errorMessages[`${res.status}:${body.error.code}`] || `${body.error.code}: ${body.error.message}`, true);
+    const error = new Error(body.error.code);
+    error.reported = true;
+    throw error;
   }
   return body.data;
 }
@@ -190,7 +219,10 @@ function buildTable(cols, rows, { onRow, emptyText = '데이터 없음' } = {}) 
     const tr = el('tr', null, onRow ? 'clickable' : '');
     for (const c of cols) {
       const v = c.fmt ? c.fmt(row[c.key], row) : row[c.key];
-      tr.append(el('td', v ?? '—', c.trunc ? 'trunc' : ''));
+      const td = el('td', null, c.trunc ? 'trunc' : '');
+      if (c.badge && c.badge(row) && v != null) td.append(el('span', v, 'badge-error'));
+      else td.textContent = v ?? '—';
+      tr.append(td);
     }
     if (onRow) tr.addEventListener('click', () => onRow(row));
     tbody.append(tr);
@@ -351,7 +383,7 @@ async function openUserDetail(userId) {
     { key: 'pairedAt', label: '페어링', fmt: fmtDate },
   ], u.cameras));
 
-  // 상태 변경 — 이 페이지의 유일한 쓰기 동작
+  // 상태 변경
   const row = el('div', null, 'status-row');
   const sel = el('select');
   for (const s of USER_STATUSES) sel.append(new Option(s, s, false, s === u.status));
@@ -368,6 +400,24 @@ async function openUserDetail(userId) {
     TABS.users.load().catch(() => {});
   });
   row.append(sel, btn);
+  if (environment === 'develop') {
+    const reportBtn = el('button', '📨 리포트 지금 발송', 'btn btn-sm');
+    reportBtn.addEventListener('click', async () => {
+      reportBtn.disabled = true;
+      try {
+        const data = await api(`/dev/reports/trigger?${new URLSearchParams({ userId: u.id })}`, {
+          method: 'POST',
+          errorMessages: { '409:RPT_ALREADY_EXISTS': '오늘 리포트가 이미 있어요. DB에서 지우고 다시 시도' },
+        });
+        toast(`리포트 #${data.reportId} — ${data.status}`);
+      } catch (e) {
+        if (!e.reported) toast(e.message, true);
+      } finally {
+        reportBtn.disabled = false;
+      }
+    });
+    row.append(reportBtn);
+  }
   frag.append(row);
   openDialog(frag);
 }
@@ -422,6 +472,30 @@ async function openFeedbackDetail(feedbackId) {
   }
   openDialog(frag);
 }
+
+// ============ 이벤트 탭 ============
+TABS.events = {
+  async load() {
+    renderFilters([
+      { name: 'status', label: '상태', type: 'select', options: ['DETECTED', 'UPLOADED', 'ANALYZED', 'FAILED'] },
+      { name: 'from', label: '시작일', type: 'date' },
+      { name: 'to', label: '종료일', type: 'date' },
+    ]);
+    const data = await api(`/admin/events?${listQuery()}`);
+    renderTable([
+      { key: 'id', label: 'ID' },
+      { key: 'detectedAt', label: '시각', fmt: fmtDate },
+      { key: 'cameraId', label: '카메라' },
+      { key: 'dogName', label: '강아지' },
+      { key: 'sourceType', label: '종류', fmt: (v, row) => `${v} / ${row.category}` },
+      { key: 'status', label: '상태' },
+      { key: 'failCode', label: '실패코드', badge: (row) => row.status === 'FAILED' },
+      { key: 'confidence', label: 'confidence' },
+      { key: 'durationSec', label: '길이(초)' },
+    ], data.items);
+    renderPager(data, movePage);
+  },
+};
 
 // ============ 이벤트 분석 탭 ============
 TABS.analyses = {

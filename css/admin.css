@@ -27,7 +27,7 @@ button { font: inherit; cursor: pointer; }
 .content { flex: 1; min-width: 0; }
 
 .filters { display: flex; gap: 8px; flex-wrap: wrap; padding: 20px 24px 6px; align-items: center; }
-.filters input, .filters select { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.filters input, .filters select, #environment { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
 
 .table-wrap { padding: 0 24px; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
@@ -50,3 +50,5 @@ dialog table { margin-bottom: 16px; }
 
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 8px; z-index: 10; }
 .toast.error { background: var(--bad); }
+
+.badge-error { color: var(--bad); border: 1px solid var(--bad); border-radius: 8px; padding: 2px 6px; }
