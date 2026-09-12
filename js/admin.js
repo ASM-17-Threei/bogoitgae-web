@@ -45,6 +45,7 @@ function showView(name) {
 function startApp() {
   showView('app');
   switchTab('users');
+  loadTableNav().catch(() => {});
 }
 
 // ============ 토스트 ============
@@ -267,6 +268,7 @@ function adminSelfCheck() {
   console.assert(buildTable(cols, []).querySelector('td').textContent === '데이터 없음', 'buildTable 빈 목록 실패');
   console.assert(buildTable(cols, [{ a: 1 }], { onRow: () => {} }).querySelector('tr.clickable') !== null, 'buildTable onRow 클래스 실패');
   console.assert(buildTable(cols, [{ a: null }]).querySelector('tbody td').textContent === '—', 'buildTable null 대시 실패');
+  console.assert(buildTable([{ key: 0, label: 'id' }, { key: 1, label: 'name' }], [[7, '멍']]).querySelectorAll('tbody td')[1].textContent === '멍', '배열 행 렌더 실패');
   console.log('adminSelfCheck 통과');
 }
 
@@ -278,7 +280,7 @@ function switchTab(name) {
   S.tab = name;
   S.page = 0;
   S.filters = {};
-  for (const b of document.querySelectorAll('#tab-nav .tab')) {
+  for (const b of document.querySelectorAll('.sidebar .tab')) {
     b.classList.toggle('active', b.dataset.tab === name);
   }
   TABS[name].load().catch(() => {});
@@ -555,6 +557,44 @@ TABS.notifications = {
       { key: 'failReason', label: '실패 사유', trunc: true },
       { key: 'sentAt', label: '발송 시각', fmt: fmtDate },
     ], data.items);
+    renderPager(data, movePage);
+  },
+};
+
+// ============ DB 테이블 브라우저 ============
+let currentTable = null;
+
+async function loadTableNav() {
+  const names = await api('/admin/tables');
+  const nav = document.getElementById('table-nav');
+  for (const name of names) {
+    const b = el('button', name, 'tab');
+    b.dataset.table = name;
+    b.addEventListener('click', () => switchTable(name));
+    nav.append(b);
+  }
+}
+
+function switchTable(name) {
+  currentTable = name;
+  S.tab = 'table';
+  S.page = 0;
+  S.filters = {};
+  for (const b of document.querySelectorAll('.sidebar .tab')) {
+    b.classList.toggle('active', b.dataset.table === name);
+  }
+  TABS.table.load().catch(() => {});
+}
+
+TABS.table = {
+  async load() {
+    // 필터 대신 현재 테이블명 표시
+    document.getElementById('filters').replaceChildren(el('span', currentTable, 'muted'));
+    const data = await api(`/admin/tables/${currentTable}?${listQuery()}`);
+    const cols = data.columns.length
+      ? data.columns.map((name, i) => ({ key: i, label: name }))
+      : [{ key: 0, label: '—' }]; // 빈 테이블 — buildTable의 "데이터 없음" 문구가 나오게 컬럼 1개 유지
+    renderTable(cols, data.rows);
     renderPager(data, movePage);
   },
 };
