@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <!-- connect-src의 localhost:8080은 로컬 백엔드 테스트용 — 운영 동작엔 영향 없음 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.bogoitgae.com http://localhost:8080; img-src 'self' data:; base-uri 'self'" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.bogoitgae.com https://dev-api.bogoitgae.com http://localhost:8080; img-src 'self' data:; base-uri 'self'" />
 <meta name="robots" content="noindex, nofollow" />
 <title>보고있개 관리자</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-paw-32.png" />
@@ -38,6 +38,7 @@
   <aside class="sidebar">
     <span class="brand">🐶 보고있개 관리자</span>
     <select id="environment" aria-label="API 환경"></select>
+    <p class="env-badge" id="env-badge" role="status">운영 — 실사용자 데이터</p>
     <nav id="tab-nav">
       <button data-tab="users" class="tab active">👤 유저</button>
       <button data-tab="feedbacks" class="tab">📣 피드백</button>
