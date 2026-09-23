@@ -6,6 +6,10 @@ const environment = Object.hasOwn(ENVIRONMENTS, savedEnvironment) && ENVIRONMENT
   ? savedEnvironment : 'develop';
 const API_BASE_URL = ENVIRONMENTS[environment];
 
+// 운영에 붙었다는 것을 화면으로 알린다. 쓰기 동작이 실사용자에게 닿으므로
+// select 값만 바뀌고 화면이 그대로면 모르고 누른다 (css 의 body.is-production).
+if (environment === 'production') document.body.classList.add('is-production');
+
 function renderEnvironment() {
   const sel = document.getElementById('environment');
   for (const [name, url] of Object.entries(ENVIRONMENTS)) {
@@ -392,7 +396,7 @@ async function openUserDetail(userId) {
   const btn = el('button', '상태 변경', 'btn btn-sm btn-primary');
   btn.addEventListener('click', async () => {
     if (sel.value === u.status) return toast('현재 상태와 동일합니다', true);
-    if (!confirm(`유저 #${u.id} 상태를 ${u.status} → ${sel.value} 로 변경할까요?`)) return;
+    if (!confirm(`[${environment}] 유저 #${u.id} 상태를 ${u.status} → ${sel.value} 로 변경할까요?`)) return;
     await api(`/admin/users/${u.id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status: sel.value }),
