@@ -36,6 +36,8 @@
 <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" integrity="sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc" crossorigin="anonymous"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js" integrity="sha384-P8VzCVnT9NBUkMrpcIZrJbA7EBjJvh/fJS6PmP+4nLIM284DtsImIv8D0fFjIkeh" crossorigin="anonymous"></script>
 <script defer src="js/main.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@amplitude/analytics-browser@2.47.3/lib/scripts/amplitude-min.js" integrity="sha384-Q3Liy2owwz9y3jw3OX+E0wnLxF+R2taqHW/t6OKQLaZLkzj2Ta3ZMjJ+0Q7ZOlgq" crossorigin="anonymous"></script>
+<script defer src="js/analytics.js"></script>
 </head>
 <body>
 
@@ -155,8 +157,8 @@
     <!-- 스토어 출시 후 실제 마켓 URL로 교체 -->
     <!-- 스토어 버튼·FAQ는 인터랙티브 요소라 data-reveal 제외 — visibility:hidden이면 탭 순서에서 빠짐 -->
     <div class="btns">
-      <a class="btn btn--dark" href="#"><svg class="ic" style="width:18px;height:18px"><use href="#i-apple"/></svg> App Store</a>
-      <a class="btn btn--ghost" href="#"><svg class="ic" style="width:18px;height:18px"><use href="#i-play"/></svg> Google Play</a>
+      <a class="btn btn--dark" href="#" data-store="app_store" data-cta-position="final_cta"><svg class="ic" style="width:18px;height:18px"><use href="#i-apple"/></svg> App Store</a>
+      <a class="btn btn--ghost" href="#" data-store="play" data-cta-position="final_cta"><svg class="ic" style="width:18px;height:18px"><use href="#i-play"/></svg> Google Play</a>
     </div>
   </div>
 </section>
