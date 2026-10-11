@@ -47,7 +47,7 @@ tbody tr.clickable:hover { background: #f8f3ec; }
 .pager { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 16px; }
 
 /* margin:auto — 상단 * 리셋이 dialog UA 기본 가운데 정렬(margin:auto)을 지워서 복원 필요 */
-dialog { margin: auto; border: 1px solid var(--line); border-radius: 12px; padding: 24px; max-width: 640px; width: 90vw; max-height: 80vh; overflow-y: auto; box-shadow: 0 12px 32px rgba(43, 39, 35, .18); }
+dialog { margin: auto; border: 1px solid var(--line); border-radius: 12px; padding: 24px; max-width: 860px; width: 90vw; max-height: 80vh; overflow-y: auto; box-shadow: 0 12px 32px rgba(43, 39, 35, .18); }
 dialog::backdrop { background: rgba(43, 39, 35, .4); }
 dialog h2 { font-size: 16px; margin-bottom: 12px; }
 dialog dl { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; margin-bottom: 16px; }
@@ -59,3 +59,40 @@ dialog table { margin-bottom: 16px; }
 .toast.error { background: var(--bad); }
 
 .badge-error { color: var(--bad); border: 1px solid var(--bad); border-radius: 8px; padding: 2px 6px; }
+
+.chip { display: inline-flex; align-items: center; padding: 3px 9px; border: 1px solid var(--accent); border-radius: 999px; background: transparent; color: var(--accent); font-size: 12px; white-space: nowrap; }
+.chip:hover { background: var(--accent); color: var(--card); }
+.chip:focus-visible, .back-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.jump-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+.back-btn { margin-right: auto; color: var(--accent); }
+.detail-section { margin: 20px 0; }
+.detail-text { white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 18px; line-height: 1.7; }
+dialog dd { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+dialog video { display: block; width: 100%; max-height: 420px; border-radius: 10px; background: #000; }
+.clip-note { font-size: 12px; margin-top: 8px; line-height: 1.6; }
+.analysis-card { padding: 18px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+.badge { display: inline-block; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; font-weight: 700; }
+.badge-sev-low, .badge-status-pending, .badge-status-not_scheduled { color: var(--sub); background: #f0eeeb; }
+.badge-sev-medium, .badge-status-detected, .badge-status-uploaded { color: #915018; background: #fff0dd; border-color: #e6c5a0; }
+.badge-sev-high, .badge-status-failed { color: var(--bad); background: #fff0ed; border-color: var(--bad); }
+.badge-status-ready, .badge-status-analyzed { color: var(--accent); background: #f8f3ec; border-color: var(--accent); }
+.pipeline-box { margin: 20px 0; }
+.pipeline { display: flex; list-style: none; gap: 16px; }
+.pipeline .step { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 12px 4px; border: 1px solid var(--line); border-radius: 10px; text-align: center; }
+.pipeline .step + .step::before { content: '→'; position: absolute; left: -16px; top: 32px; width: 15px; color: var(--sub); }
+.step-mark { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--line); font-size: 12px; font-weight: 700; }
+.pipeline .done { color: var(--accent); border-color: var(--accent); background: #f8f3ec; }
+.done .step-mark { color: var(--card); background: var(--accent); }
+.pipeline .fail { color: var(--bad); border-color: var(--bad); background: #fff0ed; }
+.fail .step-mark { color: var(--card); background: var(--bad); }
+.pipeline .pending { color: var(--sub); background: var(--bg); }
+.pipeline-error { margin-top: 10px; color: var(--bad); font-size: 12px; line-height: 1.6; }
+details > summary { cursor: pointer; color: var(--sub); }
+details > pre { max-height: 280px; overflow: auto; padding: 12px; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); font-size: 12px; }
+.detail-table { overflow-x: auto; margin-bottom: 16px; }
+@media (max-width: 540px) {
+  dialog { padding: 16px; }
+  dialog dl { grid-template-columns: 100px minmax(0, 1fr); }
+  .pipeline { gap: 12px; }
+  .pipeline .step + .step::before { left: -13px; width: 12px; }
+}
