@@ -13,7 +13,7 @@ if (environment === 'production') document.body.classList.add('is-production');
 function renderEnvironment() {
   const sel = document.getElementById('environment');
   for (const [name, url] of Object.entries(ENVIRONMENTS)) {
-    const option = new Option(url ? name : `${name} (준비중)`, name, false, name === environment);
+    const option = selectOption(url ? name : `${name} (준비중)`, name, name === environment);
     option.disabled = !url;
     sel.append(option);
   }
@@ -47,9 +47,11 @@ function showView(name) {
 }
 
 function startApp() {
+  const target = parseHash(location.hash);
   showView('app');
   switchTab('users');
   loadTableNav().catch(() => {});
+  if (target) openLinkedDetail(target.kind, target.id);
 }
 
 // ============ 토스트 ============
@@ -90,6 +92,7 @@ function beginKakaoLogin() {
   const state = randB64url(32);
   sessionStorage.setItem('kakaoState', state);
   sessionStorage.setItem('kakaoEnvironment', environment);
+  sessionStorage.setItem('adminDetailHash', parseHash(location.hash) ? location.hash : '');
   location.href = kakaoAuthorizeUrl(state);
 }
 
@@ -123,6 +126,7 @@ async function tryRefresh() {
 }
 
 function logout() {
+  closeDetail();
   tokens.clear();
   showView('login');
 }
@@ -136,16 +140,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('tab-nav').addEventListener('click', (e) => {
     if (e.target.dataset.tab) switchTab(e.target.dataset.tab);
   });
-  // 닫기 버튼이 없어서 백드롭 클릭으로 닫기 (Esc는 dialog 기본 지원)
   const dlg = document.getElementById('detail');
+  dlg.addEventListener('close', () => {
+    if (!dlg.open && currentDetail) resetDetail();
+  });
+  dlg.addEventListener('cancel', (e) => {
+    e.preventDefault();
+    closeDetail();
+  });
   dlg.addEventListener('click', (e) => {
-    if (e.target === dlg) dlg.close();
+    if (e.target === dlg) closeDetail();
   });
 
   const qs = new URLSearchParams(location.search);
   const code = qs.get('code');
   if (code) {
-    history.replaceState(null, '', location.pathname); // code 재사용 방지
+    history.replaceState(null, '', location.pathname + location.hash); // 같은 로그인 코드를 다시 쓰지 않게 한다
     const savedState = sessionStorage.getItem('kakaoState');
     const loginEnvironment = sessionStorage.getItem('kakaoEnvironment');
     sessionStorage.removeItem('kakaoState');
@@ -154,10 +164,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!savedState || qs.get('state') !== savedState) throw new Error('state 불일치 — 로그인을 다시 시도하세요');
       if (loginEnvironment !== environment) throw new Error('환경 변경 — 로그인을 다시 시도하세요');
       await loginWithCode(code);
+      const savedHash = sessionStorage.getItem('adminDetailHash');
+      if (parseHash(savedHash)) history.replaceState(null, '', location.pathname + savedHash);
     } catch (e) {
       toast(e.message, true);
     }
   }
+  if (code) sessionStorage.removeItem('adminDetailHash');
   if (tokens.access) startApp();
   else showView('login');
 });
@@ -179,6 +192,7 @@ async function api(path, opts = {}, retried = false) {
     throw new Error('세션 만료');
   }
   if (res.status === 403) {
+    closeDetail();
     showView('forbidden');
     throw new Error('권한 없음');
   }
@@ -199,6 +213,13 @@ function el(tag, text, cls) {
   if (text !== undefined && text !== null) e.textContent = String(text);
   if (cls) e.className = cls;
   return e;
+}
+
+function selectOption(label, value, selected = false) {
+  const option = el('option', label);
+  option.value = value;
+  option.selected = selected;
+  return option;
 }
 
 function fmtDate(iso) {
@@ -225,7 +246,8 @@ function buildTable(cols, rows, { onRow, emptyText = '데이터 없음' } = {}) 
     for (const c of cols) {
       const v = c.fmt ? c.fmt(row[c.key], row) : row[c.key];
       const td = el('td', null, c.trunc ? 'trunc' : '');
-      if (c.badge && c.badge(row) && v != null) td.append(el('span', v, 'badge-error'));
+      if (c.link) td.append(idChip(c.link, row[c.key]));
+      else if (c.badge && c.badge(row) && v != null) td.append(el('span', v, 'badge-error'));
       else td.textContent = v ?? '—';
       tr.append(td);
     }
@@ -273,17 +295,27 @@ function adminSelfCheck() {
   console.assert(buildTable(cols, [{ a: 1 }], { onRow: () => {} }).querySelector('tr.clickable') !== null, 'buildTable onRow 클래스 실패');
   console.assert(buildTable(cols, [{ a: null }]).querySelector('tbody td').textContent === '—', 'buildTable null 대시 실패');
   console.assert(buildTable([{ key: 0, label: 'id' }, { key: 1, label: 'name' }], [[7, '멍']]).querySelectorAll('tbody td')[1].textContent === '멍', '배열 행 렌더 실패');
-  console.log('adminSelfCheck 통과');
+  console.assert(safeHttpUrl('javascript:alert(1)') === null, '위험한 URL 차단 실패');
+  console.assert(safeHttpUrl('https://x.com/a') === 'https://x.com/a', 'HTTPS URL 처리 실패');
+  console.assert(JSON.stringify(parseHash('#event/12')) === JSON.stringify({ kind: 'event', id: 12 }), '상세 주소 읽기 실패');
+  for (const hash of ['#event/no', '#event/0', '#camera/3', '#user/1/2', '#report/-1', '#feedback/1.5']) {
+    console.assert(parseHash(hash) === null, '잘못된 상세 주소 차단 실패');
+  }
+  const linked = buildTable([{ key: 'eventId', label: '이벤트', link: 'event' }], [{ eventId: 12 }, { eventId: null }]);
+  console.assert(linked.querySelector('button.chip').textContent === '#12', 'ID 버튼 생성 실패');
+  console.assert(linked.querySelectorAll('tbody td')[1].textContent === '—', '빈 ID 처리 실패');
+  console.log('adminSelfCheck 완료');
 }
 
 // ============ 탭 프레임 ============
 const S = { tab: 'users', page: 0, filters: {} };
 const TABS = {}; // 각 탭이 { load } 를 등록한다
 
-function switchTab(name) {
+function switchTab(name, filters = {}) {
+  closeDetail();
   S.tab = name;
   S.page = 0;
-  S.filters = {};
+  S.filters = { ...filters };
   for (const b of document.querySelectorAll('.sidebar .tab')) {
     b.classList.toggle('active', b.dataset.tab === name);
   }
@@ -306,13 +338,14 @@ function renderFilters(defs, extraNode) {
     let input;
     if (d.type === 'select') {
       input = el('select');
-      input.append(new Option(d.label + ' 전체', ''));
-      for (const o of d.options) input.append(new Option(o, o));
+      input.append(selectOption(d.label + ' 전체', ''));
+      for (const o of d.options) input.append(selectOption(o, o));
     } else {
       input = el('input');
       input.type = d.type;
       input.placeholder = d.label;
     }
+    input.setAttribute('aria-label', d.label);
     input.name = d.name;
     input.value = S.filters[d.name] || ''; // load()가 페이지 이동마다 재렌더해서, 복원 안 하면 적용 중인 필터가 UI에서 사라짐
     inputs.push(input);
@@ -332,10 +365,125 @@ function movePage(page) {
   TABS[S.tab].load().catch(() => {});
 }
 
-function openDialog(node) {
+const detailStack = [];
+let currentDetail = null;
+let detailRequest = 0;
+
+function parseHash(hash) {
+  const match = /^#(event|user|report|feedback)\/([1-9]\d*)$/.exec(hash || '');
+  if (!match) return null;
+  const id = Number(match[2]);
+  return Number.isSafeInteger(id) ? { kind: match[1], id } : null;
+}
+
+function setDetailHash(hash) {
+  history.replaceState(null, '', location.pathname + location.search + hash);
+}
+
+function resetDetail() {
+  detailRequest++;
+  detailStack.length = 0;
+  currentDetail = null;
+  setDetailHash('');
   const body = document.getElementById('detail-body');
-  body.replaceChildren(node);
-  document.getElementById('detail').showModal();
+  body.querySelectorAll('video').forEach((video) => video.pause());
+  body.replaceChildren();
+}
+
+function closeDetail() {
+  document.getElementById('detail').close();
+  resetDetail();
+}
+
+function renderDetail() {
+  const body = document.getElementById('detail-body');
+  const bar = el('div', null, 'jump-row');
+  if (detailStack.length) {
+    const back = el('button', '← 뒤로', 'btn btn-sm back-btn');
+    back.addEventListener('click', () => {
+      detailRequest++;
+      currentDetail = detailStack.pop();
+      renderDetail();
+    });
+    bar.append(back);
+  }
+  const close = el('button', '닫기', 'btn btn-sm');
+  close.addEventListener('click', closeDetail);
+  bar.append(close);
+  body.querySelectorAll('video').forEach((video) => video.pause());
+  body.replaceChildren(bar, currentDetail.node);
+  setDetailHash(currentDetail.hash);
+}
+
+function openDialog(node) {
+  if (currentDetail) detailStack.push(currentDetail);
+  currentDetail = { node, hash: node.dataset.hash || '' };
+  renderDetail();
+  const dialog = document.getElementById('detail');
+  if (!dialog.open) dialog.showModal();
+}
+
+async function detailData(path) {
+  const request = ++detailRequest;
+  try {
+    const data = await api(path);
+    return request === detailRequest ? data : null;
+  } catch (error) {
+    if (request === detailRequest && !error.reported) toast(error.message, true);
+    return null;
+  }
+}
+
+function detailNode(kind, id) {
+  const node = el('div');
+  node.dataset.hash = `#${kind}/${id}`;
+  return node;
+}
+
+function openLinkedDetail(kind, id) {
+  const openers = { event: openEventDetail, user: openUserDetail, report: openReportDetail, feedback: openFeedbackDetail,
+    cameraEvents: (cameraId) => switchTab('events', { cameraId }) };
+  if (id != null && Object.hasOwn(openers, kind)) return openers[kind](id);
+}
+
+function idChip(kind, id, label) {
+  if (id == null) return el('span', '—');
+  const button = el('button', label || `#${id}`, 'chip');
+  button.type = 'button';
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openLinkedDetail(kind, id);
+  });
+  return button;
+}
+
+function safeHttpUrl(str) {
+  try {
+    const url = new URL(str);
+    return ['https:', 'http:'].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function clipPlayer(url, poster) {
+  const box = el('div', null, 'clip-player');
+  const src = safeHttpUrl(url);
+  if (!src) {
+    box.append(el('p', '재생 주소가 없거나 올바르지 않습니다.', 'muted'));
+    return box;
+  }
+  const video = el('video');
+  video.controls = true;
+  video.preload = 'metadata';
+  video.playsInline = true;
+  video.src = src;
+  const thumbnail = safeHttpUrl(poster);
+  if (thumbnail) video.poster = thumbnail;
+  const note = el('p', '재생 URL은 5분 유효 — 만료되면 다시 열기', 'muted clip-note');
+  video.addEventListener('error', () => { note.textContent = '재생할 수 없습니다. 주소가 만료됐다면 상세 화면을 다시 여세요.'; });
+  box.append(video, note);
+  return box;
 }
 
 function dl(pairs) {
@@ -345,7 +493,7 @@ function dl(pairs) {
 }
 
 function subTable(title, cols, rows) {
-  const frag = document.createDocumentFragment();
+  const frag = el('section', null, 'detail-table');
   frag.append(el('h2', title), buildTable(cols, rows, { emptyText: '없음' }));
   return frag;
 }
@@ -374,9 +522,20 @@ TABS.users = {
 };
 
 async function openUserDetail(userId) {
-  const u = await api(`/admin/users/${userId}`);
-  const frag = document.createDocumentFragment();
+  const u = await detailData(`/admin/users/${userId}`);
+  if (!u) return;
+  const frag = detailNode('user', u.id);
   frag.append(el('h2', `유저 #${u.id} — ${u.nickname}`));
+  const jumps = el('div', null, 'jump-row');
+  for (const [label, tab, sub] of [['📋 이벤트 보기', 'events'], ['🔔 리포트 알림', 'notifications', 'reports'], ['🔔 이벤트 알림', 'notifications', 'events']]) {
+    const button = el('button', label, 'btn btn-sm');
+    button.addEventListener('click', () => {
+      if (sub) notifSub = sub;
+      switchTab(tab, { userId: u.id });
+    });
+    jumps.append(button);
+  }
+  frag.append(jumps);
   frag.append(dl([
     ['가입경로', u.provider], ['상태', u.status], ['역할', u.role],
     ['가입일', fmtDate(u.createdAt)],
@@ -384,15 +543,15 @@ async function openUserDetail(userId) {
   frag.append(subTable('강아지', [
     { key: 'id', label: 'ID' }, { key: 'name', label: '이름' }, { key: 'breed', label: '견종' },
   ], u.dogs));
-  frag.append(subTable('카메라', [
+  frag.append(el('h2', '카메라'), buildTable([
     { key: 'id', label: 'ID' }, { key: 'name', label: '이름' },
     { key: 'pairedAt', label: '페어링', fmt: fmtDate },
-  ], u.cameras));
+  ], u.cameras, { onRow: (camera) => switchTab('events', { cameraId: camera.id }) }));
 
   // 상태 변경
   const row = el('div', null, 'status-row');
   const sel = el('select');
-  for (const s of USER_STATUSES) sel.append(new Option(s, s, false, s === u.status));
+  for (const s of USER_STATUSES) sel.append(selectOption(s, s, s === u.status));
   const btn = el('button', '상태 변경', 'btn btn-sm btn-primary');
   btn.addEventListener('click', async () => {
     if (sel.value === u.status) return toast('현재 상태와 동일합니다', true);
@@ -437,11 +596,12 @@ TABS.feedbacks = {
     const data = await api(`/admin/feedbacks?${listQuery()}`);
     renderTable([
       { key: 'id', label: 'ID' },
-      { key: 'eventId', label: '이벤트' },
+      { key: 'eventId', label: '이벤트', link: 'event' },
       { key: 'eventCategory', label: '카테고리' },
       { key: 'sourceType', label: '소스' },
       { key: 'reasonCode', label: '사유' },
       { key: 'detail', label: '내용', trunc: true },
+      { key: 'reporterUserId', label: '신고자 ID', link: 'user' },
       { key: 'reporterNickname', label: '신고자' },
       { key: 'createdAt', label: '신고일', fmt: fmtDate },
     ], data.items, (row) => openFeedbackDetail(row.id));
@@ -450,32 +610,21 @@ TABS.feedbacks = {
 };
 
 async function openFeedbackDetail(feedbackId) {
-  const f = await api(`/admin/feedbacks/${feedbackId}`);
-  const frag = document.createDocumentFragment();
+  const f = await detailData(`/admin/feedbacks/${feedbackId}`);
+  if (!f) return;
+  const frag = detailNode('feedback', f.id);
   frag.append(el('h2', `피드백 #${f.id}`));
+  const links = el('div', null, 'jump-row');
+  links.append(idChip('event', f.eventId, `이벤트 #${f.eventId}`), idChip('user', f.reporterUserId, `#${f.reporterUserId} ${f.reporterNickname || ''}`));
+  frag.append(links);
   frag.append(dl([
-    ['이벤트', `#${f.eventId} ${f.eventCategory} (${f.sourceType})`],
+    ['이벤트 종류', `${f.eventCategory} (${f.sourceType})`],
     ['신뢰도', f.confidence], ['길이(초)', f.durationSec],
     ['감지 시각', fmtDate(f.detectedAt)],
     ['신고 사유', f.reasonCode], ['내용', f.detail],
-    ['신고자', `#${f.reporterUserId} ${f.reporterNickname}`],
     ['신고일', fmtDate(f.createdAt)],
   ]));
-  // href는 textContent 방어 밖이라 javascript: 스킴 차단이 별도로 필요
-  let safeUrl = null;
-  try {
-    const u = new URL(f.playbackUrl);
-    if (u.protocol === 'https:' || u.protocol === 'http:') safeUrl = u.href;
-  } catch { /* null·비URL이면 링크 미표시 */ }
-  if (safeUrl) {
-    const a = el('a', '클립 재생 ↗');
-    a.href = safeUrl;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    frag.append(a);
-  } else {
-    frag.append(el('p', '클립 없음 또는 만료', 'muted'));
-  }
+  frag.append(f.playbackUrl ? clipPlayer(f.playbackUrl, f.thumbnailUrl) : el('p', '클립 없음 또는 만료', 'muted'));
   openDialog(frag);
 }
 
@@ -483,6 +632,8 @@ async function openFeedbackDetail(feedbackId) {
 TABS.events = {
   async load() {
     renderFilters([
+      { name: 'userId', label: '유저 ID', type: 'number' },
+      { name: 'cameraId', label: '카메라 ID', type: 'number' },
       { name: 'status', label: '상태', type: 'select', options: ['DETECTED', 'UPLOADED', 'ANALYZED', 'FAILED'] },
       { name: 'from', label: '시작일', type: 'date' },
       { name: 'to', label: '종료일', type: 'date' },
@@ -491,14 +642,14 @@ TABS.events = {
     renderTable([
       { key: 'id', label: 'ID' },
       { key: 'detectedAt', label: '시각', fmt: fmtDate },
-      { key: 'cameraId', label: '카메라' },
+      { key: 'cameraId', label: '카메라', link: 'cameraEvents' },
       { key: 'dogName', label: '강아지' },
       { key: 'sourceType', label: '종류', fmt: (v, row) => `${v} / ${row.category}` },
       { key: 'status', label: '상태' },
       { key: 'failCode', label: '실패코드', badge: (row) => row.status === 'FAILED' },
       { key: 'confidence', label: 'confidence' },
       { key: 'durationSec', label: '길이(초)' },
-    ], data.items);
+    ], data.items, (row) => openEventDetail(row.id));
     renderPager(data, movePage);
   },
 };
@@ -514,7 +665,7 @@ TABS.analyses = {
     const data = await api(`/admin/event-analyses?${listQuery()}`);
     renderTable([
       { key: 'id', label: 'ID' },
-      { key: 'eventId', label: '이벤트' },
+      { key: 'eventId', label: '이벤트', link: 'event' },
       { key: 'clipId', label: '클립' },
       { key: 'modelName', label: '모델' },
       { key: 'promptVersion', label: '프롬프트' },
@@ -524,7 +675,7 @@ TABS.analyses = {
       { key: 'latencyMs', label: '지연(ms)' },
       { key: 'tokenCost', label: '토큰비용' },
       { key: 'analyzedAt', label: '분석 시각', fmt: fmtDate },
-    ], data.items);
+    ], data.items, (row) => openLinkedDetail('event', row.eventId));
     renderPager(data, movePage);
   },
 };
@@ -545,6 +696,7 @@ TABS.notifications = {
       toggle.append(b);
     }
     renderFilters([
+      { name: 'userId', label: '유저 ID', type: 'number' },
       { name: 'status', label: '발송 상태', type: 'select', options: ['PENDING', 'SENT', 'FAILED'] },
       { name: 'from', label: '시작일', type: 'date' },
       { name: 'to', label: '종료일', type: 'date' },
@@ -552,8 +704,8 @@ TABS.notifications = {
     const data = await api(`/admin/notification-logs/${notifSub}?${listQuery()}`);
     renderTable([
       { key: 'id', label: 'ID' },
-      { key: 'userId', label: '유저' },
-      { key: notifSub === 'reports' ? 'reportId' : 'eventId', label: notifSub === 'reports' ? '리포트' : '이벤트' },
+      { key: 'userId', label: '유저', link: 'user' },
+      { key: notifSub === 'reports' ? 'reportId' : 'eventId', label: notifSub === 'reports' ? '리포트' : '이벤트', link: notifSub === 'reports' ? 'report' : 'event' },
       { key: 'channel', label: '채널' },
       { key: 'title', label: '제목', trunc: true },
       { key: 'body', label: '본문', trunc: true },
@@ -580,6 +732,7 @@ async function loadTableNav() {
 }
 
 function switchTable(name) {
+  closeDetail();
   currentTable = name;
   S.tab = 'table';
   S.page = 0;
@@ -602,3 +755,130 @@ TABS.table = {
     renderPager(data, movePage);
   },
 };
+
+function valueText(value) {
+  if (value == null) return '—';
+  return typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+}
+
+function booleanText(value) {
+  return value == null ? '알 수 없음' : value ? '예' : '아니요';
+}
+
+function detailBadge(value, kind) {
+  return el('span', value ?? '—', `badge badge-${kind}-${String(value || '').toLowerCase().replace(/[^a-z_]/g, '')}`);
+}
+
+function eventPipeline(event) {
+  const box = el('section', null, 'pipeline-box');
+  const strip = el('ol', null, 'pipeline');
+  const sent = (event.notificationLogs || []).some((log) => log.status === 'SENT');
+  const failed = event.status === 'FAILED';
+  // 실패 전 상태가 없어서 남아 있는 클립과 분석으로 마지막 단계를 짐작한다.
+  const reached = failed ? (event.analysis ? 2 : event.clip ? 1 : 0)
+    : ['DETECTED', 'UPLOADED', 'ANALYZED'].indexOf(event.status);
+  for (const [index, label] of ['감지', '업로드', '분석', '알림'].entries()) {
+    const done = index === 3 ? sent : index <= reached;
+    const fail = failed && index === reached + 1 && !done;
+    const state = done ? 'done' : fail ? 'fail' : 'pending';
+    const step = el('li', null, `step ${state}`);
+    step.append(el('span', done ? '✓' : fail ? '!' : index + 1, 'step-mark'),
+      el('span', label), el('small', done ? '완료' : fail ? '실패' : '대기'));
+    strip.append(step);
+  }
+  box.append(strip);
+  if (failed) box.append(el('p', `실패 코드: ${event.failCode || '알 수 없음'} · 실패 위치는 남아 있는 클립과 분석으로 추정합니다.`, 'pipeline-error'));
+  return box;
+}
+
+function eventClip(clip) {
+  const box = el('section', null, 'detail-section');
+  box.append(el('h2', '클립'));
+  if (!clip || clip.deletedAt) {
+    box.append(el('p', clip ? '클립 만료(삭제됨)' : '클립 없음(소리만 이벤트)', 'muted'));
+    return box;
+  }
+  box.append(clipPlayer(clip.playbackUrl, clip.thumbnailUrl));
+  const size = clip.fileSizeBytes == null ? '—' : `${(clip.fileSizeBytes / (1024 * 1024)).toFixed(2)} MB`;
+  box.append(el('p', `보호: ${booleanText(clip.isProtected)} · 만료 예정: ${fmtDate(clip.expiresAt)} · 파일 크기: ${size}`, 'muted clip-note'));
+  return box;
+}
+
+function analysisCard(analysis) {
+  const box = el('section', null, 'analysis-card detail-section');
+  box.append(el('h2', '분석'));
+  if (!analysis) {
+    box.append(el('p', '분석 없음', 'muted'));
+    return box;
+  }
+  const badges = el('div', null, 'jump-row');
+  badges.append(detailBadge(analysis.verdict, 'verdict'), detailBadge(analysis.severity, 'sev'));
+  box.append(badges, el('p', analysis.summary ?? '요약 없음', 'detail-text'));
+  box.append(dl([
+    ['주요 행동', valueText(analysis.mainBehavior)], ['이상 행동', valueText(analysis.abnormalBehaviors)],
+    ['강아지가 보이나요?', booleanText(analysis.dogPresent)], ['근거가 부족한가요?', booleanText(analysis.insufficientEvidence)],
+    ['모델', analysis.modelName], ['프롬프트 버전', analysis.promptVersion],
+    ['처리 시간(ms)', analysis.latencyMs], ['사용 토큰', analysis.totalTokens], ['분석 시각', fmtDate(analysis.analyzedAt)],
+  ]));
+  const raw = el('details');
+  raw.append(el('summary', '분석 원본 보기'), el('pre', valueText(analysis.rawResponse)));
+  box.append(raw);
+  return box;
+}
+
+function notificationTable(logs) {
+  return subTable('알림 로그', [
+    { key: 'id', label: 'ID' }, { key: 'userId', label: '유저', link: 'user' },
+    { key: 'channel', label: '채널' }, { key: 'title', label: '제목' },
+    { key: 'body', label: '내용' }, { key: 'status', label: '상태' },
+    { key: 'failReason', label: '실패 사유' }, { key: 'sentAt', label: '발송 시각', fmt: fmtDate },
+    { key: 'createdAt', label: '생성 시각', fmt: fmtDate },
+  ], logs || []);
+}
+
+async function openEventDetail(eventId) {
+  const event = await detailData(`/admin/events/${eventId}`);
+  if (!event) return;
+  const box = detailNode('event', event.id);
+  box.append(el('h2', `이벤트 #${event.id} — ${event.category || '—'} (${event.sourceType || '—'})`));
+  const links = el('div', null, 'jump-row');
+  links.append(idChip('user', event.userId, `#${event.userId} ${event.userNickname || ''}`),
+    idChip('cameraEvents', event.cameraId, `카메라 #${event.cameraId} ${event.cameraName || ''}`),
+    el('span', `강아지: ${event.dogName || '—'}`), detailBadge(event.status, 'status'));
+  box.append(links, eventPipeline(event), dl([
+    ['감지 시각', fmtDate(event.detectedAt)], ['신뢰도', event.confidence],
+    ['길이(초)', event.durationSec], ['생성 시각', fmtDate(event.createdAt)],
+  ]), eventClip(event.clip), analysisCard(event.analysis));
+  const reports = el('section', null, 'detail-section detail-table');
+  reports.append(el('h2', '신고'), buildTable([
+    { key: 'id', label: '신고', link: 'feedback' }, { key: 'reasonCode', label: '사유' },
+    { key: 'detail', label: '내용' }, { key: 'reporterUserId', label: '신고자', link: 'user' },
+    { key: 'reporterNickname', label: '닉네임' }, { key: 'createdAt', label: '신고 시각', fmt: fmtDate },
+  ], event.feedbacks || [], { onRow: (feedback) => openFeedbackDetail(feedback.id), emptyText: '없음' }));
+  box.append(reports, notificationTable(event.notificationLogs));
+  openDialog(box);
+}
+
+async function openReportDetail(reportId) {
+  const report = await detailData(`/admin/reports/${reportId}`);
+  if (!report) return;
+  const box = detailNode('report', report.id);
+  box.append(el('h2', `리포트 #${report.id}`));
+  const links = el('div', null, 'jump-row');
+  links.append(idChip('user', report.userId, `#${report.userId} ${report.userNickname || ''}`),
+    el('span', `강아지: ${report.dogName || '—'}`), el('span', report.reportDate || '—'), detailBadge(report.status, 'status'));
+  box.append(links);
+  for (const [title, text] of [['제목', report.headline], ['요약', report.summaryText], ['돌봄 안내', report.careSuggestion]]) {
+    box.append(el('h2', title), el('p', text ?? '—', 'detail-text'));
+  }
+  box.append(subTable('지표', [
+    { key: 'metricType', label: '종류' }, { key: 'metricValue', label: '값' }, { key: 'delta', label: '변화량' },
+  ], report.metrics || []));
+  box.append(el('h2', '생성 정보'), dl([
+    ['모델', report.modelName], ['프롬프트 버전', report.promptVersion],
+    ['연결 끊김(분)', report.offlineMinutes], ['이벤트 수', report.eventCount], ['생성 시도 횟수', report.generationAttempts],
+    ['생성 완료', fmtDate(report.generatedAt)], ['발송 시각', fmtDate(report.sentAt)], ['읽은 시각', fmtDate(report.readAt)],
+    ['예약 시각', fmtDate(report.scheduledAt)], ['관찰 시작', fmtDate(report.observingSince)], ['생성 시각', fmtDate(report.createdAt)],
+  ]), notificationTable(report.notificationLogs));
+  openDialog(box);
+}
