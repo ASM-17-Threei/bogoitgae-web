@@ -64,10 +64,11 @@ h1 > span, h2 > span { display: block; }
 .has-motion .story-video.is-ready { visibility: visible; }
 /* 네 변을 배경색으로 덮어 영상과 페이지의 경계를 부드럽게 잇습니다. */
 .video-scene::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to right, var(--bg), transparent 15%, transparent 85%, var(--bg)), linear-gradient(to bottom, var(--bg), transparent 15%, transparent 85%, var(--bg)); }
-.story-notes { position: absolute; top: 4%; right: 0; width: min(260px, 65%); }
+/* 고정 헤더 아래, 영상 패널 왼쪽 위 빈 공간에 둔다 (오른쪽 위는 헤더·폰과 겹침) */
+.story-notes { position: absolute; top: calc(var(--nav-height) + 20px); left: 0; width: min(260px, 65%); }
 .handwritten-note { position: absolute; inset: 0 0 auto; margin: 0; color: var(--accent); font-size: 16px; font-weight: 500; font-style: italic; line-height: 1.8; word-break: keep-all; transform: rotate(-4deg); opacity: 0; }
 .handwritten-note.is-active { opacity: 1; }
-.note-arrow { display: block; width: 80px; height: 48px; margin: 5px 0 0 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.note-arrow { display: block; width: 80px; height: 48px; margin: 5px 0 0 120px; transform: scaleX(-1); fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .has-motion .video-panel { position: sticky; top: 0; }
 .has-motion .chapter { min-height: var(--chapter-height); }
 #top, #features, #cta { scroll-margin-top: var(--nav-height); }
@@ -82,6 +83,7 @@ h1 > span, h2 > span { display: block; }
 .footer__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 32px; }
 .footer__logo { color: var(--accent); font-size: 21px; font-weight: 700; }
 .footer__cs { margin-top: 10px; font-size: 13px; color: var(--muted); }
+.footer__biz { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 14px; font-style: normal; font-size: 12px; line-height: 1.8; color: var(--muted); max-width: 640px; }
 .footer__links { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 13px; color: #cec7bd; }
 .footer a { display: inline-flex; align-items: center; min-height: 36px; }
 .footer__cr { margin-top: 40px; font-size: 12px; line-height: 1.8; color: var(--muted); }
