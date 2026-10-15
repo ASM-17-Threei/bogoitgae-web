@@ -56,15 +56,19 @@ h1 > span, h2 > span { display: block; }
 .store-button strong { font-size: 15px; font-weight: 500; line-height: 1.4; }
 .paw-watermark { position: absolute; z-index: -1; right: 12%; bottom: 9%; width: 115px; height: 115px; fill: var(--text); opacity: .045; transform: rotate(-23deg); pointer-events: none; }
 .chapter:nth-child(even) .paw-watermark { right: 4%; top: 13%; bottom: auto; transform: rotate(25deg); width: 76px; height: 76px; }
-.video-panel { position: relative; grid-column: 2; grid-row: 1; display: grid; place-items: end center; padding-bottom: 3svh; height: 100svh; min-width: 0; pointer-events: none; }
+.video-panel { position: relative; grid-column: 2; grid-row: 1; display: grid; place-items: center; height: 100svh; min-width: 0; pointer-events: none; }
 /* 영상 속 폰이 커질 때 양옆이 잘리지 않도록 정사각형으로 넓게 잡는다 */
-.video-scene { position: relative; width: min(100%, 78svh); aspect-ratio: 1; max-height: 78svh; overflow: hidden; }
+.video-scene { position: relative; width: min(100%, 72svh); aspect-ratio: 1; max-height: 72svh; overflow: hidden; }
+@media (min-width: 1024px) {
+  /* 큰 화면에서만 영상을 조금 내려, 위쪽 메모와 자리를 나눕니다. */
+  .video-scene { margin-top: calc(var(--nav-height) / 2); }
+}
 .video-poster, .story-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
 .story-video { visibility: hidden; }
 .has-motion .story-video.is-ready { visibility: visible; }
 /* 네 변을 배경색으로 덮어 영상과 페이지의 경계를 부드럽게 잇습니다. */
 .video-scene::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to right, var(--bg), transparent 15%, transparent 85%, var(--bg)), linear-gradient(to bottom, var(--bg), transparent 15%, transparent 85%, var(--bg)); }
-/* 고정 헤더 바로 아래 오른쪽 위. 폰은 패널 아래쪽으로 내려서 메모 자리를 비워 둔다 */
+/* 메모는 고정된 메뉴 바로 아래, 오른쪽 위에 둡니다. */
 .story-notes { position: absolute; top: calc(var(--nav-height) + 8px); right: 0; width: min(250px, 65%); text-align: right; }
 .handwritten-note { position: absolute; inset: 0 0 auto; margin: 0; color: var(--accent); font-size: 16px; font-weight: 500; font-style: italic; line-height: 1.8; word-break: keep-all; transform: rotate(-4deg); opacity: 0; }
 .handwritten-note.is-active { opacity: 1; }
@@ -97,43 +101,60 @@ h1 > span, h2 > span { display: block; }
   .store-button:active, .download-link:active { transform: scale(.97); }
 }
 @media (max-width: 1023px) {
-  :root { --nav-height: 68px; }
-  .wrap, .footer { width: calc(100% - 40px); }
-  .landing-nav__inner { width: calc(100% - 32px); gap: 12px; }
-  .brand { font-size: 18px; gap: 8px; }
+  :root { --nav-height: calc(68px + env(safe-area-inset-top, 0px)); --video-height: 46svh; }
+  .wrap, .footer { width: auto; margin-left: max(20px, env(safe-area-inset-left, 0px)); margin-right: max(20px, env(safe-area-inset-right, 0px)); }
+  .landing-nav__inner { width: auto; margin-left: max(16px, env(safe-area-inset-left, 0px)); margin-right: max(16px, env(safe-area-inset-right, 0px)); padding-top: env(safe-area-inset-top, 0px); gap: 12px; }
+  .brand { min-height: 44px; font-size: 18px; gap: 8px; }
   .nav-links { display: none; }
   .download-link { padding: 9px 14px; gap: 10px; font-size: 12px; }
   .story { display: block; }
-  .video-panel { height: var(--video-height); margin-top: var(--nav-height); }
+  .video-panel { height: var(--video-height); margin-top: var(--nav-height); padding-bottom: 0; }
   .video-scene { width: 100%; height: 100%; max-height: none; aspect-ratio: auto; }
-  .story-notes { top: 14px; right: 2px; width: 34%; max-width: 190px; }
-  .handwritten-note { font-size: 11px; line-height: 1.7; }
-  .note-arrow { width: 48px; height: 30px; margin-left: 0; }
-  .chapter { min-height: auto; padding: 64px 0; }
+  /* 가운데 폰을 크게 보여주고, 사방 가장자리를 배경색으로 부드럽게 잇습니다. */
+  .video-poster, .story-video { object-fit: cover; object-position: center; }
+  .video-scene::after { background: linear-gradient(to right, var(--bg), transparent 12%, transparent 88%, var(--bg)), linear-gradient(to bottom, var(--bg), transparent 8%, transparent 86%, var(--bg)); }
+  .story-notes { display: none; }
+  .chapter, .has-motion .chapter { min-height: auto; padding: 16px 0 40px; }
   .chapter__copy { max-width: 600px; margin-inline: auto; padding: 0; }
-  h1 { font-size: clamp(36px, 6.5vw, 54px); }
+  h1 { font-size: clamp(32px, 6.5vw, 54px); line-height: 1.24; }
   h2 { font-size: clamp(27px, 5.1vw, 42px); }
-  .eyebrow { gap: 7px; margin-bottom: 18px; font-size: 11px; }
-  .description { max-width: 520px; margin-top: 18px; font-size: 14px; line-height: 1.85; }
-  .chips { gap: 6px; margin-top: 20px; }
-  .chips li { padding: 8px 10px; gap: 5px; font-size: 11px; }
+  .eyebrow { gap: 7px; margin-bottom: 12px; font-size: 12px; }
+  .description { max-width: 520px; margin-top: 14px; font-size: 15px; line-height: 1.7; }
+  .chips { gap: 6px; margin-top: 14px; }
+  .chips li { padding: 8px 10px; gap: 5px; font-size: 12px; }
   .chips .icon { width: 14px; height: 14px; }
-  .store-buttons { gap: 10px; margin-top: 24px; }
-  .store-button { min-height: 60px; padding: 10px 14px; gap: 9px; }
+  .store-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: 420px; gap: 8px; margin-top: 16px; }
+  .store-button { min-width: 0; min-height: 56px; padding: 8px; gap: 7px; justify-content: center; }
   .store-button strong { font-size: 13px; }
   .store-button .icon { width: 23px; height: 23px; }
+  .hero, .has-motion .hero { padding-top: 12px; }
+  .hero .eyebrow { margin-bottom: 8px; }
+  .hero .description, .hero .chips { margin-top: 10px; }
+  .hero .store-buttons { margin-top: 12px; }
   .has-motion .story { display: grid; grid-template-columns: minmax(0, 1fr); }
-  .has-motion .video-panel { grid-area: 1 / 1; top: var(--nav-height); z-index: 2; margin: var(--nav-height) -20px 0; background: var(--bg); }
-  .has-motion .story__copy { grid-area: 1 / 1; }
-  .has-motion .chapter { padding: calc(var(--nav-height) + var(--video-height) + 24px) 0 36px; }
-  .has-motion #features { scroll-margin-top: 0; }
+  .has-motion .video-panel { grid-area: 1 / 1; top: var(--nav-height); z-index: 2; margin: var(--nav-height) 0 0; background: var(--bg); }
+  /* 영상 자리의 여백은 첫 글 앞에만 넣어, 글 사이가 크게 벌어지지 않게 합니다. */
+  .has-motion .story__copy { grid-area: 1 / 1; padding-top: calc(var(--nav-height) + var(--video-height)); }
+  .has-motion #top, .has-motion #features { scroll-margin-top: calc(var(--nav-height) + var(--video-height)); }
   .chapter::before { top: 36%; left: -20px; }
   .cta { padding-block: 90px 100px; }
+  .cta .store-buttons { margin-inline: auto; }
   .cta h2 { font-size: clamp(28px, 5.2vw, 42px); }
   .cta .paw-watermark { width: 80px; height: 80px; top: 4%; }
   .footer__top { flex-direction: column; gap: 24px; }
   .footer__links { gap: 6px 20px; font-size: 12px; }
+  .footer { padding-bottom: max(28px, env(safe-area-inset-bottom, 0px)); }
+  .footer__biz { word-break: keep-all; }
+  .footer a { min-height: 44px; }
   .footer__cr { margin-top: 28px; font-size: 11px; }
+  @media (max-height: 500px) {
+    /* 높이가 낮은 화면에서는 영상도 함께 올라가야 글을 가리지 않습니다. */
+    :root { --video-height: 60svh; }
+    .has-motion .story { display: block; }
+    .has-motion .video-panel { position: relative; top: auto; }
+    .has-motion .story__copy { padding-top: 0; }
+    .has-motion #top, .has-motion #features { scroll-margin-top: var(--nav-height); }
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .story-video { visibility: hidden !important; }

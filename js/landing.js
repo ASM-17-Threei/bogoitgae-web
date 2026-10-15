@@ -9,6 +9,8 @@
   const copies = chapters.map(function (chapter) { return chapter.querySelector(".chapter__copy"); });
   const notes = Array.from(document.querySelectorAll(".handwritten-note"));
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const mobile = window.matchMedia("(max-width: 1023px)");
+  let chapterOffsets = [];
   let context;
   let trigger;
   let frame = 0;
@@ -26,9 +28,9 @@
     nav.classList.add("is-scrolled");
   }
 
-  // 영상 속 앱 화면이 바뀌는 시각(초). 글 n번째가 화면 중앙일 때 영상이 이 시각에 오도록 구간별로 직선 보간한다
-  // (영상 0~2초는 빈 배경이라 건너뛴다)
-  const SCENE_TIMES = [2.5, 4.0, 5.5, 7.0, 9.8];
+  // 첫 폰·라이브·멀티캠·클립 순서이며, 마지막 글은 스토어 배지가 보이는 시각에 맞춥니다.
+  // 모바일과 데스크톱 모두 이 시각(초)을 기준으로 글 사이에서 영상을 앞뒤로 움직입니다.
+  const SCENE_TIMES = [2.5, 3.5, 4.9, 6.4, 8.75];
   function timeAt(p) {
     const seg = Math.min(SCENE_TIMES.length - 2, Math.floor(p * (SCENE_TIMES.length - 1)));
     const local = p * (SCENE_TIMES.length - 1) - seg;
@@ -67,6 +69,14 @@
 
   function update(self) {
     progress = self.progress;
+    if (mobile.matches && chapterOffsets.length === chapters.length) {
+      // 모바일은 글마다 높이가 달라서, 실제 글 사이의 거리로 영상 시각을 맞춥니다.
+      const distance = self.progress * chapterOffsets[chapters.length - 1];
+      let index = 0;
+      while (index < chapters.length - 2 && distance >= chapterOffsets[index + 1]) index++;
+      const span = chapterOffsets[index + 1] - chapterOffsets[index];
+      progress = (index + (distance - chapterOffsets[index]) / span) / (chapters.length - 1);
+    }
     // 글과 메모도 영상처럼 다섯 구간으로 나누어, 뒤로 스크롤해도 함께 돌아갑니다.
     activate(Math.round(progress * (chapters.length - 1)));
     requestSeek();
@@ -74,6 +84,15 @@
 
   function measure() {
     root.style.removeProperty("--chapter-height");
+    if (mobile.matches) {
+      const firstTop = chapters[0].getBoundingClientRect().top;
+      chapterOffsets = chapters.map(function (chapter) {
+        return chapter.getBoundingClientRect().top - firstTop;
+      });
+      // 기존 구간 계산에 맞춰 평균 거리를 씁니다. 글 높이를 억지로 같게 만들지는 않습니다.
+      chapterHeight = chapterOffsets[chapters.length - 1] / (chapters.length - 1);
+      return;
+    }
     chapterHeight = Math.ceil(Math.max.apply(null, chapters.map(function (chapter) {
       return chapter.getBoundingClientRect().height;
     })));
