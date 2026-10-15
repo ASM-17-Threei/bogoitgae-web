@@ -17,7 +17,6 @@
   let progress = 0;
   let activeChapter = -1;
   let chapterHeight = 0;
-  let mobileStart = 0;
   let enabled = false;
   let videoFailed = false;
 
@@ -86,12 +85,10 @@
   function measure() {
     root.style.removeProperty("--chapter-height");
     if (mobile.matches) {
-      // 글의 위쪽이 헤더 아래 16px에 닿을 때, 그 글에 맞는 장면을 보여 줍니다.
-      const textTops = chapters.map(function (chapter) {
-        return chapter.getBoundingClientRect().top + parseFloat(window.getComputedStyle(chapter).paddingTop);
+      const firstTop = chapters[0].getBoundingClientRect().top;
+      chapterOffsets = chapters.map(function (chapter) {
+        return chapter.getBoundingClientRect().top - firstTop;
       });
-      mobileStart = textTops[0] + window.scrollY - nav.getBoundingClientRect().height - 16;
-      chapterOffsets = textTops.map(function (top) { return top - textTops[0]; });
       // 기존 구간 계산에 맞춰 평균 거리를 씁니다. 글 높이를 억지로 같게 만들지는 않습니다.
       chapterHeight = chapterOffsets[chapters.length - 1] / (chapters.length - 1);
       return;
@@ -138,7 +135,7 @@
       context = window.gsap.context(function () {
         trigger = window.ScrollTrigger.create({
           trigger: story,
-          start: function () { return mobile.matches ? mobileStart : "top top"; },
+          start: "top top",
           // 마지막 글이 화면 위에 닿을 때 영상도 끝나도록, 글 4개 높이만큼만 스크럽 구간으로 잡는다
           end: function () { return "+=" + chapterHeight * (chapters.length - 1); },
           scrub: true,
