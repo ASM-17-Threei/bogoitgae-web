@@ -82,6 +82,7 @@ h1 > span, h2 > span { display: block; }
 .footer__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 32px; }
 .footer__logo { color: var(--accent); font-size: 21px; font-weight: 700; }
 .footer__cs { margin-top: 10px; font-size: 13px; color: var(--muted); }
+.footer__biz { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 14px; font-style: normal; font-size: 12px; line-height: 1.8; color: var(--muted); max-width: 640px; }
 .footer__links { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 13px; color: #cec7bd; }
 .footer a { display: inline-flex; align-items: center; min-height: 36px; }
 .footer__cr { margin-top: 40px; font-size: 12px; line-height: 1.8; color: var(--muted); }
