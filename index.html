@@ -11,7 +11,11 @@
 <meta property="og:title" content="낡은 휴대폰을 반려견 홈캠으로 재활용하세요" />
 <meta property="og:description" content="우리 강아지의 이상행동을 AI 판단하고 알림을 전송합니다" />
 <meta property="og:url" content="https://bogoitgae.com/" />
-<meta property="og:image" content="https://bogoitgae.com/assets/web_movie-poster.jpg" />
+<meta property="og:site_name" content="보고있개" />
+<meta property="og:image" content="https://bogoitgae.com/assets/og-image.jpg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="저녁 햇살이 드는 거실 소파" />
 <meta property="og:locale" content="ko_KR" />
 <meta name="twitter:card" content="summary_large_image" />
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-paw-32.png" />
@@ -30,12 +34,15 @@
   "applicationCategory": "LifestyleApplication",
   "description": "안 쓰는 스마트폰을 반려견 AI 홈캠으로 바꿔주는 반려견 모니터링 앱. 실시간 영상, AI 이상행동 감지, 순간 클립 저장, 하루 리포트, 똑똑한 알림.",
   "url": "https://bogoitgae.com/",
+  "downloadUrl": "https://apps.apple.com/kr/app/id6814348051",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "KRW" }
 }
 </script>
 <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" integrity="sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc" crossorigin="anonymous"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js" integrity="sha384-P8VzCVnT9NBUkMrpcIZrJbA7EBjJvh/fJS6PmP+4nLIM284DtsImIv8D0fFjIkeh" crossorigin="anonymous"></script>
 <script defer src="js/landing.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@amplitude/analytics-browser@2.47.3/lib/scripts/amplitude-min.js" integrity="sha384-Q3Liy2owwz9y3jw3OX+E0wnLxF+R2taqHW/t6OKQLaZLkzj2Ta3ZMjJ+0Q7ZOlgq" crossorigin="anonymous"></script>
+<script defer src="js/analytics.js"></script>
 </head>
 <body>
 <svg class="icon-library" width="0" height="0" aria-hidden="true"><defs>
@@ -91,9 +98,9 @@
           <p class="description">서랍 속 안 쓰는 스마트폰이 우리 아이를 지켜주는 홈캠이 됩니다. 이상행동은 AI가 판단해 알림으로 알려드려요.</p>
           <ul class="chips"><li><svg class="icon" aria-hidden="true"><use href="#i-camera" /></svg>실시간 영상</li><li><svg class="icon" aria-hidden="true"><use href="#i-link" /></svg>빠른 연결</li><li><svg class="icon" aria-hidden="true"><use href="#i-phone" /></svg>공기계 활용</li></ul>
           <div class="store-buttons">
-<a class="store-button" href="https://apps.apple.com/kr/app/%EB%B3%B4%EA%B3%A0%EC%9E%88%EA%B0%9C/id6814348051" target="_blank" rel="noopener"><svg class="icon" aria-hidden="true"><use href="#i-apple" /></svg><span><small>App Store에서</small><strong>다운로드 하기</strong></span></a>
+<a class="store-button" data-store="app_store" data-cta-position="hero" href="https://apps.apple.com/kr/app/%EB%B3%B4%EA%B3%A0%EC%9E%88%EA%B0%9C/id6814348051" target="_blank" rel="noopener"><svg class="icon" aria-hidden="true"><use href="#i-apple" /></svg><span><small>App Store에서</small><strong>다운로드 하기</strong></span></a>
 <!-- Google Play 출시 후 URL로 교체 -->
-<a class="store-button" href="#"><svg class="icon" aria-hidden="true"><use href="#i-play" /></svg><span><small>Google Play에서</small><strong>다운로드 하기</strong></span></a>
+<a class="store-button" data-store="play" data-cta-position="hero" href="#"><svg class="icon" aria-hidden="true"><use href="#i-play" /></svg><span><small>Google Play에서</small><strong>다운로드 하기</strong></span></a>
 </div>
         </div>
       </section>
@@ -143,9 +150,9 @@
     <h2 id="cta-title">지금, <em class="accent">보고있개</em>로<br />우리 아이와 더 가까워지세요</h2>
     <p class="description">안 쓰는 스마트폰 하나로, 언제 어디서든 우리 아이의 소중한 일상을 함께할 수 있습니다.</p>
     <div class="store-buttons">
-<a class="store-button" href="https://apps.apple.com/kr/app/%EB%B3%B4%EA%B3%A0%EC%9E%88%EA%B0%9C/id6814348051" target="_blank" rel="noopener"><svg class="icon" aria-hidden="true"><use href="#i-apple" /></svg><span><small>App Store에서</small><strong>다운로드 하기</strong></span></a>
+<a class="store-button" data-store="app_store" data-cta-position="final_cta" href="https://apps.apple.com/kr/app/%EB%B3%B4%EA%B3%A0%EC%9E%88%EA%B0%9C/id6814348051" target="_blank" rel="noopener"><svg class="icon" aria-hidden="true"><use href="#i-apple" /></svg><span><small>App Store에서</small><strong>다운로드 하기</strong></span></a>
 <!-- Google Play 출시 후 URL로 교체 -->
-<a class="store-button" href="#"><svg class="icon" aria-hidden="true"><use href="#i-play" /></svg><span><small>Google Play에서</small><strong>다운로드 하기</strong></span></a>
+<a class="store-button" data-store="play" data-cta-position="final_cta" href="#"><svg class="icon" aria-hidden="true"><use href="#i-play" /></svg><span><small>Google Play에서</small><strong>다운로드 하기</strong></span></a>
 </div>
   </section>
 </main>
