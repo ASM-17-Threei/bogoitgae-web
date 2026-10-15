@@ -1,7 +1,7 @@
 /* 보고있개 — 랜딩 이용 통계(Amplitude). 앱(frontend analytics_boot.dart)과 같은 규칙: 운영에서만 보낸다. */
 (function () {
   // 운영 프로젝트 키(브라우저 키는 공개값). 비어 있으면 아무것도 보내지 않는다.
-  var AMPLITUDE_API_KEY = "";
+  var AMPLITUDE_API_KEY = "b89ef4dc496edf2eb61740a1a5e33fe1";
   var PROD_HOSTS = ["bogoitgae.com", "www.bogoitgae.com"];
 
   if (!AMPLITUDE_API_KEY || PROD_HOSTS.indexOf(location.hostname) === -1) return;
