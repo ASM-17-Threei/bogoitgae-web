@@ -3,3 +3,4 @@
 .agents/
 skills-lock.json
 .claude/skills/
+.playwright-mcp/
