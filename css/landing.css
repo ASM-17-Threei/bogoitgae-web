@@ -101,7 +101,7 @@ h1 > span, h2 > span { display: block; }
   .store-button:active, .download-link:active { transform: scale(.97); }
 }
 @media (max-width: 1023px) {
-  :root { --nav-height: calc(68px + env(safe-area-inset-top, 0px)); --video-height: 46svh; }
+  :root { --nav-height: calc(68px + env(safe-area-inset-top, 0px)); --video-height: 42svh; }
   .wrap, .footer { width: auto; margin-left: max(20px, env(safe-area-inset-left, 0px)); margin-right: max(20px, env(safe-area-inset-right, 0px)); }
   .landing-nav__inner { width: auto; margin-left: max(16px, env(safe-area-inset-left, 0px)); margin-right: max(16px, env(safe-area-inset-right, 0px)); padding-top: env(safe-area-inset-top, 0px); gap: 12px; }
   .brand { min-height: 44px; font-size: 18px; gap: 8px; }
@@ -112,7 +112,7 @@ h1 > span, h2 > span { display: block; }
   .video-scene { width: 100%; height: 100%; max-height: none; aspect-ratio: auto; }
   /* 가운데 폰을 크게 보여주고, 사방 가장자리를 배경색으로 부드럽게 잇습니다. */
   .video-poster, .story-video { object-fit: cover; object-position: center; }
-  .video-scene::after { background: linear-gradient(to right, var(--bg), transparent 12%, transparent 88%, var(--bg)), linear-gradient(to bottom, var(--bg), transparent 8%, transparent 86%, var(--bg)); }
+  .video-scene::after { background: linear-gradient(to right, var(--bg), transparent 12%, transparent 88%, var(--bg)), linear-gradient(to bottom, var(--bg), transparent 20%, transparent 86%, var(--bg)); }
   .story-notes { display: none; }
   .chapter, .has-motion .chapter { min-height: auto; padding: 16px 0 40px; }
   .chapter__copy { max-width: 600px; margin-inline: auto; padding: 0; }
@@ -132,10 +132,16 @@ h1 > span, h2 > span { display: block; }
   .hero .description, .hero .chips { margin-top: 10px; }
   .hero .store-buttons { margin-top: 12px; }
   .has-motion .story { display: grid; grid-template-columns: minmax(0, 1fr); }
-  .has-motion .video-panel { grid-area: 1 / 1; top: var(--nav-height); z-index: 2; margin: var(--nav-height) 0 0; background: var(--bg); }
-  /* 영상 자리의 여백은 첫 글 앞에만 넣어, 글 사이가 크게 벌어지지 않게 합니다. */
-  .has-motion .story__copy { grid-area: 1 / 1; padding-top: calc(var(--nav-height) + var(--video-height)); }
-  .has-motion #top, .has-motion #features { scroll-margin-top: calc(var(--nav-height) + var(--video-height)); }
+  /* 글 끝에 놓인 영상을 화면 아래에 붙이고, 홈 바 위로 안전 여백을 둡니다. */
+  .has-motion .video-panel { grid-area: 1 / 1; align-self: end; top: auto; bottom: 0; z-index: 2; margin: 0; padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--bg); }
+  /* 위쪽 20%는 서서히 덮어, 영상 뒤로 지나가는 글이 부드럽게 사라지게 합니다. */
+  .has-motion .video-panel { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 20%); mask-image: linear-gradient(to bottom, transparent, #000 20%); }
+  .has-motion .story__copy { grid-area: 1 / 1; padding-top: calc(var(--nav-height) + 16px); }
+  /* 한 화면 높이를 강제로 늘리지 않고, 영상에 가려질 자리만 비워 둡니다. */
+  .has-motion .chapter { padding-bottom: var(--video-height); }
+  .has-motion .hero { padding-top: 0; }
+  .has-motion #top { scroll-margin-top: calc(var(--nav-height) + 16px); }
+  .has-motion #features { scroll-margin-top: var(--nav-height); }
   .chapter::before { top: 36%; left: -20px; }
   .cta { padding-block: 90px 100px; }
   .cta .store-buttons { margin-inline: auto; }
@@ -151,8 +157,10 @@ h1 > span, h2 > span { display: block; }
     /* 높이가 낮은 화면에서는 영상도 함께 올라가야 글을 가리지 않습니다. */
     :root { --video-height: 60svh; }
     .has-motion .story { display: block; }
-    .has-motion .video-panel { position: relative; top: auto; }
+    .has-motion .video-panel { position: relative; top: auto; bottom: auto; margin-top: var(--nav-height); padding-bottom: 0; -webkit-mask-image: none; mask-image: none; }
     .has-motion .story__copy { padding-top: 0; }
+    .has-motion .chapter { padding-bottom: 40px; }
+    .has-motion .hero { padding-top: 12px; }
     .has-motion #top, .has-motion #features { scroll-margin-top: var(--nav-height); }
   }
 }
