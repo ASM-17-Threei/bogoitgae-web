@@ -298,6 +298,12 @@ function adminSelfCheck() {
   console.assert(safeHttpUrl('javascript:alert(1)') === null, '위험한 URL 차단 실패');
   console.assert(safeHttpUrl('https://x.com/a') === 'https://x.com/a', 'HTTPS URL 처리 실패');
   console.assert(JSON.stringify(parseHash('#event/12')) === JSON.stringify({ kind: 'event', id: 12 }), '상세 주소 읽기 실패');
+  console.assert(JSON.stringify(parseHash('#inquiry/3')) === JSON.stringify({ kind: 'inquiry', id: 3 }), '신고 상세 주소 읽기 실패');
+  console.assert(inquiryKindsText(['NOTIFICATION', 'ETC']) === '알림 문제, 그 외', '신고 유형 라벨 실패');
+  console.assert(inquiryKindsText(['UNKNOWN_KIND']) === 'UNKNOWN_KIND', '모르는 유형은 코드 그대로');
+  console.assert(inquiryKindsText(null) === '—', '유형 없음 처리 실패');
+  console.assert(inquiryAttachmentNode({ type: 'PHOTO', url: 'javascript:alert(1)', expired: false }).querySelector('img') === null, '위험한 사진 URL 차단 실패');
+  console.assert(inquiryAttachmentNode({ type: 'CLIP', clipId: 5, url: null, expired: true }).textContent.includes('보관 기한'), '만료 클립 표시 실패');
   for (const hash of ['#event/no', '#event/0', '#camera/3', '#user/1/2', '#report/-1', '#feedback/1.5']) {
     console.assert(parseHash(hash) === null, '잘못된 상세 주소 차단 실패');
   }
@@ -370,7 +376,7 @@ let currentDetail = null;
 let detailRequest = 0;
 
 function parseHash(hash) {
-  const match = /^#(event|user|report|feedback)\/([1-9]\d*)$/.exec(hash || '');
+  const match = /^#(event|user|report|feedback|inquiry)\/([1-9]\d*)$/.exec(hash || '');
   if (!match) return null;
   const id = Number(match[2]);
   return Number.isSafeInteger(id) ? { kind: match[1], id } : null;
@@ -442,6 +448,7 @@ function detailNode(kind, id) {
 
 function openLinkedDetail(kind, id) {
   const openers = { event: openEventDetail, user: openUserDetail, report: openReportDetail, feedback: openFeedbackDetail,
+    inquiry: openInquiryDetail,
     cameraEvents: (cameraId) => switchTab('events', { cameraId }) };
   if (id != null && Object.hasOwn(openers, kind)) return openers[kind](id);
 }
@@ -625,6 +632,94 @@ async function openFeedbackDetail(feedbackId) {
     ['신고일', fmtDate(f.createdAt)],
   ]));
   frag.append(f.playbackUrl ? clipPlayer(f.playbackUrl, f.thumbnailUrl) : el('p', '클립 없음 또는 만료', 'muted'));
+  openDialog(frag);
+}
+
+// ============ 문제 신고 탭 (AISW-443) ============
+// 앱 `58 설정 / 문제 신고` 에서 들어온 것. 이벤트에 묶인 오탐 신고(피드백 탭)와 다른 창구다.
+// 유형 라벨은 앱 칩과 같은 말을 쓴다 — 사용자가 고른 그대로 읽혀야 한다.
+const INQUIRY_KINDS = {
+  NOTIFICATION: '알림 문제', DETECTION: '감지 문제', CONNECTION: '연결 문제', VIDEO: '영상', ETC: '그 외',
+};
+
+function inquiryKindsText(kinds) {
+  if (!kinds || kinds.length === 0) return '—';
+  return kinds.map((kind) => INQUIRY_KINDS[kind] || kind).join(', ');
+}
+
+TABS.inquiries = {
+  async load() {
+    renderFilters([
+      { name: 'kind', label: '유형', type: 'select', options: Object.keys(INQUIRY_KINDS) },
+    ]);
+    const data = await api(`/admin/inquiries?${listQuery()}`);
+    renderTable([
+      { key: 'id', label: 'ID' },
+      { key: 'kinds', label: '유형', fmt: inquiryKindsText },
+      { key: 'detail', label: '내용', trunc: true },
+      { key: 'platform', label: '기기', fmt: (platform, row) => `${platform} · ${row.appVersion}` },
+      { key: 'attachmentCount', label: '첨부' },
+      { key: 'reporterUserId', label: '신고자 ID', link: 'user' },
+      { key: 'reporterNickname', label: '신고자' },
+      { key: 'status', label: '상태' },
+      { key: 'createdAt', label: '신고일', fmt: fmtDate },
+    ], data.items, (row) => openInquiryDetail(row.id));
+    renderPager(data, movePage);
+  },
+};
+
+// 첨부 한 건. 사진은 이미지로, 클립은 플레이어로 — 둘 다 presigned URL 이라 5분 뒤 만료된다.
+// 클립은 신고가 참조만 하므로 보관 기한(운영 24시간)이 지나면 url 이 null 이고 expired=true 다.
+function inquiryAttachmentNode(attachment) {
+  const box = el('figure', null, 'inquiry-attachment');
+  if (attachment.type === 'PHOTO') {
+    const src = safeHttpUrl(attachment.url);
+    if (!src) {
+      box.append(el('p', '사진 주소가 없거나 올바르지 않습니다.', 'muted'));
+      return box;
+    }
+    const link = el('a');
+    link.href = src;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    const img = el('img');
+    img.src = src;
+    img.alt = '신고 첨부 사진';
+    img.loading = 'lazy';
+    img.addEventListener('error', () => { box.replaceChildren(el('p', '사진을 불러올 수 없습니다. 주소가 만료됐다면 상세 화면을 다시 여세요.', 'muted')); });
+    link.append(img);
+    box.append(link, el('figcaption', '사진 — 누르면 원본', 'muted'));
+    return box;
+  }
+  if (attachment.expired || !attachment.url) {
+    box.append(el('p', `클립 #${attachment.clipId} — 보관 기한이 지나 재생할 수 없습니다.`, 'muted'));
+    return box;
+  }
+  box.append(clipPlayer(attachment.url), el('figcaption', `클립 #${attachment.clipId}`, 'muted'));
+  return box;
+}
+
+async function openInquiryDetail(inquiryId) {
+  const q = await detailData(`/admin/inquiries/${inquiryId}`);
+  if (!q) return;
+  const frag = detailNode('inquiry', q.id);
+  frag.append(el('h2', `문제 신고 #${q.id}`));
+  const links = el('div', null, 'jump-row');
+  links.append(idChip('user', q.reporterUserId, `#${q.reporterUserId} ${q.reporterNickname || ''}`));
+  frag.append(links);
+  frag.append(dl([
+    ['유형', inquiryKindsText(q.kinds)],
+    ['상태', q.status],
+    ['기기', q.platform], ['앱 버전', q.appVersion],
+    ['내용', q.detail],
+    ['신고일', fmtDate(q.createdAt)],
+  ]));
+  const attachments = q.attachments || [];
+  const section = el('section', null, 'inquiry-attachments');
+  section.append(el('h2', `첨부 ${attachments.length}건`));
+  if (attachments.length === 0) section.append(el('p', '첨부 없음', 'muted'));
+  for (const attachment of attachments) section.append(inquiryAttachmentNode(attachment));
+  frag.append(section);
   openDialog(frag);
 }
 
