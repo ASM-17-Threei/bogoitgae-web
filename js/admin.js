@@ -313,6 +313,7 @@ function adminSelfCheck() {
   const uuid = '123e4567-e89b-12d3-a456-426614174000';
   console.assert(parseHash(`#iapNotification/${uuid}`)?.id === uuid, '스토어 알림 주소 읽기 실패');
   console.assert(parseHash('#iapNotification/12345678901234567890')?.id === '12345678901234567890', '구글 숫자 id 주소 읽기 실패');
+  console.assert(parseHash('#iapNotification/sync-ack:' + 'a'.repeat(40))?.id === 'sync-ack:' + 'a'.repeat(40), 'sync-ack 알림 주소 읽기 실패');
   console.assert(parseHash('#iapNotification/<script>') === null, '잘못된 스토어 알림 주소 차단 실패');
   console.assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(localInputValue(new Date())), 'datetime-local 값 형식 실패');
   const conflict = showConflict({ title: 't', latest: [['a', '<b>']], mine: [['a', 'c']], reload: () => {} });
@@ -383,7 +384,7 @@ let currentDetail = null;
 let detailRequest = 0;
 
 // 스토어 알림 id: Apple 은 uuid, Google 은 Pub/Sub messageId(긴 숫자 문자열) — 안전한 글자만 허용
-const IAP_ID = /^#iapNotification\/([A-Za-z0-9._-]{1,64})$/;
+const IAP_ID = /^#iapNotification\/([A-Za-z0-9._:-]{1,64})$/;
 
 function parseHash(hash) {
   const iap = IAP_ID.exec(hash || '');
@@ -1018,7 +1019,7 @@ TABS.subscriptions = {
       { name: 'tier', label: '등급', type: 'select', options: TIERS },
       { name: 'provider', label: '스토어', type: 'select', options: ['APPLE', 'GOOGLE'] },
       { name: 'status', label: '스토어 상태', type: 'select', options: SUB_STATUSES },
-      { name: 'q', label: '닉네임·ID 검색', type: 'text' },
+      { name: 'q', label: '닉네임 검색', type: 'text' },
     ]);
     const [summary, data] = await Promise.all([api('/admin/subscriptions/summary'), api(`/admin/subscriptions?${listQuery()}`)]);
     renderTable([
