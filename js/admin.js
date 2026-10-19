@@ -310,6 +310,13 @@ function adminSelfCheck() {
   const linked = buildTable([{ key: 'eventId', label: '이벤트', link: 'event' }], [{ eventId: 12 }, { eventId: null }]);
   console.assert(linked.querySelector('button.chip').textContent === '#12', 'ID 버튼 생성 실패');
   console.assert(linked.querySelectorAll('tbody td')[1].textContent === '—', '빈 ID 처리 실패');
+  const uuid = '123e4567-e89b-12d3-a456-426614174000';
+  console.assert(parseHash(`#iapNotification/${uuid}`)?.id === uuid, '스토어 알림 주소 읽기 실패');
+  console.assert(parseHash('#iapNotification/12345678901234567890')?.id === '12345678901234567890', '구글 숫자 id 주소 읽기 실패');
+  console.assert(parseHash('#iapNotification/<script>') === null, '잘못된 스토어 알림 주소 차단 실패');
+  console.assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(localInputValue(new Date())), 'datetime-local 값 형식 실패');
+  const conflict = showConflict({ title: 't', latest: [['a', '<b>']], mine: [['a', 'c']], reload: () => {} });
+  console.assert(conflict.querySelectorAll('dd')[0].textContent === '<b>' && conflict.querySelector('b') === null, '충돌 블록 이스케이프 실패');
   console.log('adminSelfCheck 완료');
 }
 
@@ -375,7 +382,12 @@ const detailStack = [];
 let currentDetail = null;
 let detailRequest = 0;
 
+// 스토어 알림 id: Apple 은 uuid, Google 은 Pub/Sub messageId(긴 숫자 문자열) — 안전한 글자만 허용
+const IAP_ID = /^#iapNotification\/([A-Za-z0-9._-]{1,64})$/;
+
 function parseHash(hash) {
+  const iap = IAP_ID.exec(hash || '');
+  if (iap) return { kind: 'iapNotification', id: iap[1] };
   const match = /^#(event|user|report|feedback|inquiry)\/([1-9]\d*)$/.exec(hash || '');
   if (!match) return null;
   const id = Number(match[2]);
@@ -448,7 +460,7 @@ function detailNode(kind, id) {
 
 function openLinkedDetail(kind, id) {
   const openers = { event: openEventDetail, user: openUserDetail, report: openReportDetail, feedback: openFeedbackDetail,
-    inquiry: openInquiryDetail,
+    inquiry: openInquiryDetail, iapNotification: openIapNotificationDetail,
     cameraEvents: (cameraId) => switchTab('events', { cameraId }) };
   if (id != null && Object.hasOwn(openers, kind)) return openers[kind](id);
 }
@@ -531,6 +543,17 @@ TABS.users = {
 async function openUserDetail(userId) {
   const u = await detailData(`/admin/users/${userId}`);
   if (!u) return;
+  const request = detailRequest;
+  // 구독은 따로 가져온다 — 탈퇴 유저는 404 가 정상이고, 구독 조회가 실패해도 상태 변경 같은 기존 기능은 열려야 한다
+  let sub = null;
+  if (u.status !== 'DELETED') {
+    try {
+      sub = await api(`/admin/users/${userId}/subscription`);
+    } catch (e) {
+      if (!e.reported) toast(e.message, true);
+    }
+    if (request !== detailRequest) return;
+  }
   const frag = detailNode('user', u.id);
   frag.append(el('h2', `유저 #${u.id} — ${u.nickname}`));
   const jumps = el('div', null, 'jump-row');
@@ -563,10 +586,30 @@ async function openUserDetail(userId) {
   btn.addEventListener('click', async () => {
     if (sel.value === u.status) return toast('현재 상태와 동일합니다', true);
     if (!confirm(`[${environment}] 유저 #${u.id} 상태를 ${u.status} → ${sel.value} 로 변경할까요?`)) return;
-    await api(`/admin/users/${u.id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: sel.value }),
-    });
+    btn.disabled = true;
+    try {
+      await api(`/admin/users/${u.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ expectedStatus: u.status, status: sel.value }), // 내가 본 상태 그대로일 때만 바뀐다 (낙관적 락)
+        errorMessages: { '409:ADMIN_STATUS_CONFLICT': '다른 관리자가 먼저 바꿨어요' },
+      });
+    } catch (e) {
+      btn.disabled = false;
+      if (e.message !== 'ADMIN_STATUS_CONFLICT') {
+        if (!e.reported) toast(e.message, true);
+        return;
+      }
+      const latest = await detailData(`/admin/users/${u.id}`);
+      if (!latest) return;
+      frag.querySelector('.conflict-box')?.remove();
+      frag.append(showConflict({
+        title: '다른 관리자가 먼저 상태를 바꿨어요',
+        latest: [['상태', latest.status]],
+        mine: [['내가 보던 상태', u.status], ['바꾸려던 상태', sel.value]],
+        reload: () => reopenDetail(() => openUserDetail(u.id)),
+      }));
+      return;
+    }
     toast('상태가 변경되었습니다');
     document.getElementById('detail').close();
     TABS.users.load().catch(() => {});
@@ -591,6 +634,7 @@ async function openUserDetail(userId) {
     row.append(reportBtn);
   }
   frag.append(row);
+  frag.append(sub ? subscriptionSection(frag, u, sub) : subscriptionMissing());
   openDialog(frag);
 }
 
@@ -811,6 +855,272 @@ TABS.notifications = {
     renderPager(data, movePage);
   },
 };
+
+// ============ 충돌 화면 (낙관적 락 409) ============
+// 자동 재시도는 하지 않는다 — 최신 값과 내가 넣으려던 값을 나란히 보여 주고 사람이 다시 정한다.
+// latest/mine: [[라벨, 값], ...] (호출한 쪽이 재조회해서 넘긴다). 값은 dl()→textContent 로만 들어간다.
+function showConflict({ title, latest, mine, reload }) {
+  const box = el('section', null, 'conflict-box');
+  box.setAttribute('role', 'alert');
+  const cols = el('div', null, 'conflict-cols');
+  for (const [heading, pairs] of [['최신 값', latest], ['내가 넣으려던 값', mine]]) {
+    const col = el('div', null, 'conflict-col');
+    col.append(el('h3', heading), dl(pairs));
+    cols.append(col);
+  }
+  const again = el('button', '최신으로 다시 보기', 'btn btn-sm btn-primary');
+  again.addEventListener('click', reload);
+  box.append(el('h2', title), cols, again);
+  return box;
+}
+
+// 충돌 화면의 "다시 보기" — 지금 상세를 스택에 쌓지 않고 같은 자리에서 다시 연다
+function reopenDetail(open) {
+  currentDetail = detailStack.pop() ?? null;
+  return open();
+}
+
+// ============ 구독 (유저 상세 카드) ============
+const TIERS = ['FREE', 'STANDARD', 'PREMIUM'];
+
+// datetime-local 값은 "내 시계 기준" 문자열 — toISOString 은 UTC 라 오프셋을 빼서 맞춘다
+function localInputValue(date) {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+function overrideText(sub) {
+  return sub.overrideTier ? `${sub.overrideTier} ~ ${fmtDate(sub.overrideUntil)} (${sub.overrideReason ?? '사유 없음'})` : '없음';
+}
+
+function subscriptionMissing() {
+  const box = el('section', null, 'detail-section');
+  box.append(el('h2', '구독'), el('p', '구독 정보 없음', 'muted'));
+  return box;
+}
+
+function subscriptionSection(frag, u, sub) {
+  const box = el('section', null, 'detail-section');
+  const valid = sub.tier !== 'FREE' && sub.entitlementUntil && new Date(sub.entitlementUntil) > new Date();
+  box.append(el('h2', '구독'), dl([
+    ['등급', sub.tier], ['유효', valid ? '✓' : '—'], ['만료', fmtDate(sub.entitlementUntil)],
+    ['스토어', sub.provider], ['스토어 상태', sub.storeStatus], ['자동갱신', sub.autoRenew == null ? '—' : booleanText(sub.autoRenew)],
+    ['수동 지급', overrideText(sub)],
+  ]));
+  box.append(subTable('거래 내역', [
+    { key: 'purchaseDate', label: '결제', fmt: fmtDate }, { key: 'provider', label: '스토어' },
+    { key: 'productId', label: '상품' }, { key: 'expiresDate', label: '만료', fmt: fmtDate },
+    { key: 'revocationDate', label: '취소', fmt: fmtDate }, { key: 'environment', label: '환경' },
+    { key: 'transactionId', label: '거래 ID' },
+  ], sub.transactions || []));
+  box.append(subTable('지급 이력', [
+    { key: 'createdAt', label: '시각', fmt: fmtDate }, { key: 'adminUserId', label: '관리자', link: 'user' },
+    { key: 'tier', label: '등급' }, { key: 'until', label: '기한', fmt: fmtDate }, { key: 'reason', label: '사유' },
+  ], sub.overrideLogs || []));
+
+  // 수동 지급 폼
+  const form = el('form', null, 'grant-form');
+  const tier = el('select');
+  tier.setAttribute('aria-label', '지급 등급');
+  for (const t of TIERS) tier.append(selectOption(t, t, t === 'PREMIUM'));
+  const until = el('input');
+  until.type = 'datetime-local';
+  until.required = true;
+  until.setAttribute('aria-label', '지급 기한');
+  const quick = el('span', null, 'quick-days');
+  for (const days of [7, 30, 90]) {
+    const b = el('button', `${days}일`, 'btn btn-sm');
+    b.type = 'button';
+    b.addEventListener('click', () => { until.value = localInputValue(new Date(Date.now() + days * 86400000)); });
+    quick.append(b);
+  }
+  const reason = el('input');
+  reason.maxLength = 200;
+  reason.required = true;
+  reason.placeholder = '사유 (필수, 200자 이내)';
+  reason.setAttribute('aria-label', '지급 사유');
+  const grant = el('button', '지급', 'btn btn-sm btn-primary');
+  grant.type = 'submit';
+  form.append(tier, until, quick, reason, grant);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const untilDate = new Date(until.value); // datetime-local 은 내 시계 기준 → ISO(UTC) 로 보낸다
+    if (Number.isNaN(untilDate.getTime())) return toast('기한을 골라 주세요', true);
+    const mine = [['등급', tier.value], ['기한', fmtDate(untilDate.toISOString())], ['사유', reason.value.trim()]];
+    if (!confirm(`[${environment}] 유저 #${u.id} 에게 ${tier.value} 를 ${fmtDate(untilDate.toISOString())} 까지 지급할까요?`)) return;
+    grant.disabled = true;
+    try {
+      await api(`/admin/users/${u.id}/subscription-override`, {
+        method: 'PUT',
+        body: JSON.stringify({ tier: tier.value, until: untilDate.toISOString(), reason: reason.value.trim(), version: sub.version }),
+        errorMessages: { '409:SUB_CONFLICT': '다른 관리자가 먼저 바꿨어요' },
+      });
+    } catch (e) {
+      grant.disabled = false;
+      if (e.message !== 'SUB_CONFLICT') {
+        if (!e.reported) toast(e.message, true);
+        return;
+      }
+      const latest = await detailData(`/admin/users/${u.id}/subscription`);
+      if (!latest) return;
+      frag.querySelector('.conflict-box')?.remove();
+      const conflict = showConflict({
+        title: '다른 관리자가 먼저 바꿨어요',
+        latest: [['등급', latest.tier], ['만료', fmtDate(latest.entitlementUntil)], ['수동 지급', overrideText(latest)]],
+        mine,
+        reload: () => reopenDetail(() => openUserDetail(u.id)),
+      });
+      frag.append(conflict);
+      conflict.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    toast('지급했어요');
+    if (S.tab === 'subscriptions') TABS.subscriptions.load().catch(() => {});
+    reopenDetail(() => openUserDetail(u.id));
+  });
+  box.append(el('h2', '수동 지급'), form);
+
+  const help = el('p', 'FREE로 지급하거나 기한을 지금으로 하면 회수. 스토어 결제는 회수되지 않음 — 환불은 ', 'muted');
+  for (const [label, href] of [['App Store Connect', 'https://appstoreconnect.apple.com/'], ['Play Console', 'https://play.google.com/console/']]) {
+    const a = el('a', label);
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    help.append(a, label === 'App Store Connect' ? ' / ' : '');
+  }
+  help.append('에서');
+  box.append(help);
+  return box;
+}
+
+// ============ 구독 탭 ============
+const SUB_STATUSES = ['ACTIVE', 'EXPIRED', 'BILLING_RETRY', 'GRACE', 'REVOKED', 'PAUSED'];
+const yesDash = (v) => (v ? '✓' : '—');
+
+function summaryCards(s) {
+  const row = el('div', null, 'summary-cards');
+  const tier = s.activeByTier || {};
+  const store = s.activeByProvider || {};
+  for (const [label, value] of [
+    ['PREMIUM 유효', tier.PREMIUM], ['STANDARD 유효', tier.STANDARD],
+    ['Apple 유효', store.APPLE], ['Google 유효', store.GOOGLE],
+    ['7일 내 만료', s.expiringIn7Days], ['결제 재시도', s.billingRetry], ['유예', s.grace], ['수동 지급 중', s.overrideActive],
+  ]) {
+    const card = el('div', null, 'summary-card');
+    card.append(el('span', value ?? 0, 'summary-num'), el('span', label, 'muted'));
+    row.append(card);
+  }
+  return row;
+}
+
+TABS.subscriptions = {
+  async load() {
+    renderFilters([
+      { name: 'tier', label: '등급', type: 'select', options: TIERS },
+      { name: 'provider', label: '스토어', type: 'select', options: ['APPLE', 'GOOGLE'] },
+      { name: 'status', label: '스토어 상태', type: 'select', options: SUB_STATUSES },
+      { name: 'q', label: '닉네임·ID 검색', type: 'text' },
+    ]);
+    const [summary, data] = await Promise.all([api('/admin/subscriptions/summary'), api(`/admin/subscriptions?${listQuery()}`)]);
+    renderTable([
+      { key: 'userId', label: 'ID' },
+      { key: 'nickname', label: '닉네임' },
+      { key: 'tier', label: '등급' },
+      { key: 'active', label: '유효', fmt: yesDash },
+      { key: 'provider', label: '스토어' },
+      { key: 'storeStatus', label: '스토어 상태' },
+      { key: 'entitlementUntil', label: '만료', fmt: fmtDate },
+      { key: 'autoRenew', label: '자동갱신', fmt: (v) => (v == null ? '—' : booleanText(v)) },
+      { key: 'overrideActive', label: '수동지급', fmt: yesDash },
+    ], data.items, (row) => openUserDetail(row.userId));
+    document.getElementById('table-wrap').prepend(summaryCards(summary));
+    renderPager(data, movePage);
+  },
+};
+
+// ============ 스토어 알림 탭 ============
+let iapDefaulted = false; // 처음 들어올 때만 FAILED 로 시작 — 그 뒤 사용자가 고른 필터는 건드리지 않는다
+
+TABS.iapNotifications = {
+  async load() {
+    if (!iapDefaulted) {
+      iapDefaulted = true;
+      S.filters = { ...S.filters, state: 'FAILED' };
+    }
+    renderFilters([
+      { name: 'provider', label: '스토어', type: 'select', options: ['APPLE', 'GOOGLE'] },
+      { name: 'state', label: '상태', type: 'select', options: ['FAILED', 'PENDING', 'DONE'] },
+    ]);
+    const data = await api(`/admin/iap-notifications?${listQuery()}`);
+    renderTable([
+      { key: 'receivedAt', label: '받은 시각', fmt: fmtDate },
+      { key: 'provider', label: '스토어' },
+      { key: 'type', label: 'type/subtype', fmt: (type, row) => (row.subtype ? `${type}/${row.subtype}` : type) },
+      { key: 'attempts', label: '시도' },
+      { key: 'processedAt', label: '처리 시각', fmt: fmtDate },
+      { key: 'error', label: '에러', trunc: true },
+      { key: 'state', label: '상태', badge: (row) => row.state === 'FAILED' },
+    ], data.items, (row) => openIapNotificationDetail(row.notificationUuid));
+    renderPager(data, movePage);
+  },
+};
+
+function prettyPayload(raw) {
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2);
+  } catch {
+    return raw ?? '—';
+  }
+}
+
+async function openIapNotificationDetail(uuid) {
+  const data = await detailData(`/admin/iap-notifications/${encodeURIComponent(uuid)}`);
+  if (!data) return;
+  const n = data.item;
+  const frag = detailNode('iapNotification', n.notificationUuid);
+  frag.append(el('h2', `스토어 알림 ${n.notificationUuid}`), dl([
+    ['스토어', n.provider], ['type/subtype', n.subtype ? `${n.type}/${n.subtype}` : n.type],
+    ['상태', n.state], ['시도 횟수', n.attempts], ['에러', n.error],
+    ['받은 시각', fmtDate(n.receivedAt)], ['스토어 서명 시각', fmtDate(data.signedDate)], ['처리 시각', fmtDate(n.processedAt)],
+  ]));
+  if (n.state === 'FAILED') {
+    const retry = el('button', '다시 처리', 'btn btn-sm btn-primary');
+    retry.addEventListener('click', async () => {
+      if (!confirm(`[${environment}] 스토어 알림 ${n.notificationUuid} 를 다시 처리할까요?`)) return;
+      retry.disabled = true;
+      try {
+        await api(`/admin/iap-notifications/${encodeURIComponent(n.notificationUuid)}/retry`, {
+          method: 'POST',
+          body: JSON.stringify({ version: n.version }),
+          errorMessages: { '409:SUB_CONFLICT': '다른 관리자가 먼저 바꿨어요' },
+        });
+      } catch (e) {
+        retry.disabled = false;
+        if (e.message !== 'SUB_CONFLICT') {
+          if (!e.reported) toast(e.message, true);
+          return;
+        }
+        const latest = await detailData(`/admin/iap-notifications/${encodeURIComponent(n.notificationUuid)}`);
+        if (!latest) return;
+        frag.querySelector('.conflict-box')?.remove();
+        frag.append(showConflict({
+          title: '다른 관리자가 먼저 바꿨어요',
+          latest: [['상태', latest.item.state], ['시도 횟수', latest.item.attempts], ['에러', latest.item.error]],
+          mine: [['요청', '다시 처리'], ['내가 보던 시도 횟수', n.attempts]],
+          reload: () => reopenDetail(() => openIapNotificationDetail(n.notificationUuid)),
+        }));
+        return;
+      }
+      toast('다시 처리 대기열에 넣었어요 (10분 안에 처리)');
+      closeDetail();
+      TABS.iapNotifications.load().catch(() => {});
+    });
+    const actions = el('div', null, 'jump-row');
+    actions.append(retry);
+    frag.append(actions);
+  }
+  frag.append(el('h2', '원본 payload'), el('pre', prettyPayload(data.rawPayload), 'raw-payload'));
+  openDialog(frag);
+}
 
 // ============ DB 테이블 브라우저 ============
 let currentTable = null;

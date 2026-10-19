@@ -102,3 +102,20 @@ details > pre { max-height: 280px; overflow: auto; padding: 12px; margin-top: 8p
 .inquiry-attachment { margin: 0; }
 .inquiry-attachment img { display: block; max-width: 100%; max-height: 420px; border-radius: 10px; background: var(--card); }
 .inquiry-attachment figcaption { margin-top: 4px; font-size: 12px; }
+
+/* 구독·스토어 알림 (AISW-428) — 요약 카드, 지급 폼, 동시 수정 충돌 블록 */
+.summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.summary-card { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+.summary-num { font-size: 22px; font-weight: 700; }
+.grant-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.grant-form select, .grant-form input { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.grant-form input[maxlength] { flex: 1 1 200px; min-width: 0; }
+.quick-days { display: inline-flex; gap: 4px; }
+.raw-payload { max-height: 320px; overflow: auto; padding: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.conflict-box { margin-top: 16px; padding: 16px; background: #fff0ed; border: 1px solid var(--bad); border-radius: 10px; }
+.conflict-box h2 { color: var(--bad); }
+.conflict-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.conflict-col { padding: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+.conflict-col h3 { font-size: 13px; margin-bottom: 8px; }
+.conflict-col dl { grid-template-columns: 90px minmax(0, 1fr); margin-bottom: 0; }
+@media (max-width: 540px) { .conflict-cols { grid-template-columns: 1fr; } }
