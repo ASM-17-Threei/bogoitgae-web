@@ -226,6 +226,11 @@ function fmtDate(iso) {
   return iso ? new Date(iso).toLocaleString('ko-KR', { hour12: false }) : '—';
 }
 
+// null = 컬럼 생기기 전 가입하고 아직 접속 안 한 유저 — 다음 로그인·재발급 때 서버가 채운다
+function fmtPlatform(platform) {
+  return { ANDROID: '안드로이드', IOS: 'iOS' }[platform] ?? '—';
+}
+
 // 목록 화면(renderTable)과 상세 dialog(subTable)가 공유하는 테이블 빌더
 function buildTable(cols, rows, { onRow, emptyText = '데이터 없음' } = {}) {
   const table = el('table');
@@ -283,6 +288,7 @@ function adminSelfCheck() {
   console.assert(el('td', null).textContent === '', 'null 처리 실패');
   console.assert(fmtDate(null) === '—', 'fmtDate null 실패');
   console.assert(fmtDate('2026-01-02T03:04:05Z').includes('2026'), 'fmtDate 파싱 실패');
+  console.assert(fmtPlatform('IOS') === 'iOS' && fmtPlatform(null) === '—', 'fmtPlatform 실패');
   const u = kakaoAuthorizeUrl('st');
   console.assert(u.startsWith('https://kauth.kakao.com/oauth/authorize?') && u.includes('scope=openid') && u.includes('state=st'), '카카오 URL 실패');
   console.assert(b64url(new Uint8Array([251, 239])).indexOf('=') === -1, 'b64url 패딩 제거 실패');
@@ -532,6 +538,7 @@ TABS.users = {
       { key: 'id', label: 'ID' },
       { key: 'nickname', label: '닉네임' },
       { key: 'provider', label: '가입경로' },
+      { key: 'platform', label: 'OS', fmt: fmtPlatform },
       { key: 'status', label: '상태' },
       { key: 'role', label: '역할' },
       { key: 'createdAt', label: '가입일', fmt: fmtDate },
@@ -568,7 +575,7 @@ async function openUserDetail(userId) {
   }
   frag.append(jumps);
   frag.append(dl([
-    ['가입경로', u.provider], ['상태', u.status], ['역할', u.role],
+    ['가입경로', u.provider], ['OS', fmtPlatform(u.platform)], ['상태', u.status], ['역할', u.role],
     ['가입일', fmtDate(u.createdAt)],
   ]));
   frag.append(subTable('강아지', [
