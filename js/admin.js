@@ -252,6 +252,7 @@ function buildTable(cols, rows, { onRow, emptyText = '데이터 없음' } = {}) 
       const v = c.fmt ? c.fmt(row[c.key], row) : row[c.key];
       const td = el('td', null, c.trunc ? 'trunc' : '');
       if (c.link) td.append(idChip(c.link, row[c.key]));
+      else if (c.img && v) td.append(Object.assign(el('img', null, 'cell-img'), { src: v, alt: c.label, loading: 'lazy' }));
       else if (c.badge && c.badge(row) && v != null) td.append(el('span', v, 'badge-error'));
       else td.textContent = v ?? '—';
       tr.append(td);
@@ -579,6 +580,7 @@ async function openUserDetail(userId) {
     ['가입일', fmtDate(u.createdAt)],
   ]));
   frag.append(subTable('강아지', [
+    { key: 'imageUrl', label: '사진', img: true },
     { key: 'id', label: 'ID' }, { key: 'name', label: '이름' }, { key: 'breed', label: '견종' },
   ], u.dogs));
   frag.append(el('h2', '카메라'), buildTable([
