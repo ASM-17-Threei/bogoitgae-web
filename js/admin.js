@@ -252,6 +252,7 @@ function buildTable(cols, rows, { onRow, emptyText = '데이터 없음' } = {}) 
       const v = c.fmt ? c.fmt(row[c.key], row) : row[c.key];
       const td = el('td', null, c.trunc ? 'trunc' : '');
       if (c.link) td.append(idChip(c.link, row[c.key]));
+      else if (c.img && v) td.append(Object.assign(el('img', null, 'cell-img'), { src: v, alt: c.label, loading: 'lazy' }));
       else if (c.badge && c.badge(row) && v != null) td.append(el('span', v, 'badge-error'));
       else td.textContent = v ?? '—';
       tr.append(td);
@@ -579,6 +580,7 @@ async function openUserDetail(userId) {
     ['가입일', fmtDate(u.createdAt)],
   ]));
   frag.append(subTable('강아지', [
+    { key: 'imageUrl', label: '사진', img: true },
     { key: 'id', label: 'ID' }, { key: 'name', label: '이름' }, { key: 'breed', label: '견종' },
   ], u.dogs));
   frag.append(el('h2', '카메라'), buildTable([
@@ -790,16 +792,45 @@ TABS.events = {
       { key: 'id', label: 'ID' },
       { key: 'detectedAt', label: '시각', fmt: fmtDate },
       { key: 'cameraId', label: '카메라', link: 'cameraEvents' },
+      { key: 'userId', label: '유저', link: 'user' },
+      { key: 'userNickname', label: '닉네임' },
       { key: 'dogName', label: '강아지' },
       { key: 'sourceType', label: '종류', fmt: (v, row) => `${v} / ${row.category}` },
       { key: 'status', label: '상태' },
       { key: 'failCode', label: '실패코드', badge: (row) => row.status === 'FAILED' },
+      { key: 'reanalyzedAt', label: '수동 재분석', fmt: (v) => (v ? fmtDate(v) : '—') },
       { key: 'confidence', label: 'confidence' },
       { key: 'durationSec', label: '길이(초)' },
     ], data.items, (row) => openEventDetail(row.id));
     renderPager(data, movePage);
+    const failedIds = data.items.filter((row) => row.status === 'FAILED').map((row) => row.id);
+    if (failedIds.length > 0) {
+      const btn = el('button', `이 페이지 실패 ${failedIds.length}건 다시 분석`, 'btn btn-sm btn-primary');
+      btn.addEventListener('click', () => reanalyzeEvents(failedIds, btn));
+      document.getElementById('filters').append(btn);
+    }
   },
 };
+
+// 실패 이벤트 재분석 — 서버는 UPLOADED 로 되돌리고 분석을 비동기로 다시 돌린다. 결과는 몇 초 뒤 새로고침해서 확인.
+async function reanalyzeEvents(ids, btn) {
+  btn.disabled = true;
+  let ok = 0;
+  for (const id of ids) {
+    try {
+      await api(`/admin/events/${id}/reanalyze`, {
+        method: 'POST',
+        errorMessages: { '409:EVT_NOT_FAILED': `#${id}은 이미 실패 상태가 아니에요. 새로고침해 주세요` },
+      });
+      ok += 1;
+    } catch (e) {
+      if (!e.reported) toast(`#${id} ${e.message}`, true);
+    }
+  }
+  if (ok > 0) toast(`${ok}건 재분석 시작 — 몇 초 뒤 새로고침하면 결과가 보여요`);
+  btn.disabled = false;
+  if (S.tab === 'events') TABS.events.load().catch(() => {});
+}
 
 // ============ 이벤트 분석 탭 ============
 TABS.analyses = {
@@ -1200,7 +1231,15 @@ function eventPipeline(event) {
     strip.append(step);
   }
   box.append(strip);
-  if (failed) box.append(el('p', `실패 코드: ${event.failCode || '알 수 없음'} · 실패 위치는 남아 있는 클립과 분석으로 추정합니다.`, 'pipeline-error'));
+  if (failed) {
+    box.append(el('p', `실패 코드: ${event.failCode || '알 수 없음'} · 실패 위치는 남아 있는 클립과 분석으로 추정합니다.`, 'pipeline-error'));
+    const retry = el('button', '다시 분석', 'btn btn-sm btn-primary');
+    retry.addEventListener('click', async () => {
+      await reanalyzeEvents([event.id], retry);
+      openEventDetail(event.id);
+    });
+    box.append(retry);
+  }
   return box;
 }
 
@@ -1258,6 +1297,7 @@ async function openEventDetail(eventId) {
   links.append(idChip('user', event.userId, `#${event.userId} ${event.userNickname || ''}`),
     idChip('cameraEvents', event.cameraId, `카메라 #${event.cameraId} ${event.cameraName || ''}`),
     el('span', `강아지: ${event.dogName || '—'}`), detailBadge(event.status, 'status'));
+  if (event.reanalyzedAt) links.append(el('span', `수동 재분석 ${fmtDate(event.reanalyzedAt)}`, 'badge'));
   box.append(links, eventPipeline(event), dl([
     ['감지 시각', fmtDate(event.detectedAt)], ['신뢰도', event.confidence],
     ['길이(초)', event.durationSec], ['생성 시각', fmtDate(event.createdAt)],

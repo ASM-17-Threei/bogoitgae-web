@@ -58,6 +58,8 @@ dialog table { margin-bottom: 16px; }
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 8px; z-index: 10; }
 .toast.error { background: var(--bad); }
 
+/* 표 안 썸네일(강아지 사진) — presigned URL 이라 5분 뒤 만료, 상세를 다시 열면 새로 받는다 */
+.cell-img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; display: block; }
 .badge-error { color: var(--bad); border: 1px solid var(--bad); border-radius: 8px; padding: 2px 6px; }
 
 .chip { display: inline-flex; align-items: center; padding: 3px 9px; border: 1px solid var(--accent); border-radius: 999px; background: transparent; color: var(--accent); font-size: 12px; white-space: nowrap; }
