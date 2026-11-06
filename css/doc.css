@@ -50,6 +50,10 @@ h1, h2 { margin: 0; font-family: "Gothic A1", sans-serif; font-weight: 800; lett
 .doc__body tbody { display: table; width: 100%; }
 .doc__body th, .doc__body td { min-width: 140px; border: 1px solid var(--line); padding: 12px 16px; text-align: left; vertical-align: top; }
 .doc__body th { background: #1b1d22; color: var(--text); font-weight: 700; }
+.doc__head .doc__lang { margin-top: 16px; font-size: 13px; }
+.doc__lang a { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+/* 한글에 맞춘 좁은 자간은 영어 제목을 뭉개므로 영어 페이지에서 푼다. */
+html[lang="en"] h1, html[lang="en"] h2 { letter-spacing: -.02em; word-break: normal; }
 .doc__note { background: #1b1d22; border-radius: 14px; border-left: 3px solid var(--accent); padding: 18px 20px; }
 
 .footer { width: min(1360px, calc(100% - 96px)); margin-inline: auto; }
