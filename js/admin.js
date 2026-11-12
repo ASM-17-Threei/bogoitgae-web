@@ -215,6 +215,9 @@ function el(tag, text, cls) {
   return e;
 }
 
+const chipLabel = (idKey, nameKey) => (row) => row[nameKey] ? `#${row[idKey]} ${row[nameKey]}` : null;
+const userChipLabel = chipLabel('userId', 'userNickname');
+
 function selectOption(label, value, selected = false) {
   const option = el('option', label);
   option.value = value;
@@ -251,7 +254,8 @@ function buildTable(cols, rows, { onRow, emptyText = '데이터 없음' } = {}) 
     for (const c of cols) {
       const v = c.fmt ? c.fmt(row[c.key], row) : row[c.key];
       const td = el('td', null, c.trunc ? 'trunc' : '');
-      if (c.link) td.append(idChip(c.link, row[c.key]));
+      if (c.link) td.append(idChip(c.link, row[c.key], c.linkLabel?.(row)));
+      else if (c.badgeKind) td.append(detailBadge(v, c.badgeKind));
       else if (c.img && v) td.append(Object.assign(el('img', null, 'cell-img'), { src: v, alt: c.label, loading: 'lazy' }));
       else if (c.badge && c.badge(row) && v != null) td.append(el('span', v, 'badge-error'));
       else td.textContent = v ?? '—';
@@ -311,9 +315,11 @@ function adminSelfCheck() {
   console.assert(inquiryKindsText(null) === '—', '유형 없음 처리 실패');
   console.assert(inquiryAttachmentNode({ type: 'PHOTO', url: 'javascript:alert(1)', expired: false }).querySelector('img') === null, '위험한 사진 URL 차단 실패');
   console.assert(inquiryAttachmentNode({ type: 'CLIP', clipId: 5, url: null, expired: true }).textContent.includes('보관 기한'), '만료 클립 표시 실패');
-  for (const hash of ['#event/no', '#event/0', '#camera/3', '#user/1/2', '#report/-1', '#feedback/1.5']) {
+  for (const hash of ['#event/no', '#event/0', '#cam/3', '#user/1/2', '#report/-1', '#feedback/1.5']) {
     console.assert(parseHash(hash) === null, '잘못된 상세 주소 차단 실패');
   }
+  console.assert(JSON.stringify(parseHash('#camera/3')) === JSON.stringify({ kind: 'camera', id: 3 }), '카메라 상세 주소 읽기 실패');
+  console.assert(buildTable([{ key: 'userId', label: '유저', link: 'user', linkLabel: userChipLabel }], [{ userId: 2, userNickname: '<멍>' }]).querySelector('button.chip').textContent === '#2 <멍>', '칩 닉네임 표시 실패');
   const linked = buildTable([{ key: 'eventId', label: '이벤트', link: 'event' }], [{ eventId: 12 }, { eventId: null }]);
   console.assert(linked.querySelector('button.chip').textContent === '#12', 'ID 버튼 생성 실패');
   console.assert(linked.querySelectorAll('tbody td')[1].textContent === '—', '빈 ID 처리 실패');
@@ -396,7 +402,7 @@ const IAP_ID = /^#iapNotification\/([A-Za-z0-9._:-]{1,64})$/;
 function parseHash(hash) {
   const iap = IAP_ID.exec(hash || '');
   if (iap) return { kind: 'iapNotification', id: iap[1] };
-  const match = /^#(event|user|report|feedback|inquiry)\/([1-9]\d*)$/.exec(hash || '');
+  const match = /^#(event|user|report|feedback|inquiry|camera)\/([1-9]\d*)$/.exec(hash || '');
   if (!match) return null;
   const id = Number(match[2]);
   return Number.isSafeInteger(id) ? { kind: match[1], id } : null;
@@ -469,7 +475,7 @@ function detailNode(kind, id) {
 function openLinkedDetail(kind, id) {
   const openers = { event: openEventDetail, user: openUserDetail, report: openReportDetail, feedback: openFeedbackDetail,
     inquiry: openInquiryDetail, iapNotification: openIapNotificationDetail,
-    cameraEvents: (cameraId) => switchTab('events', { cameraId }) };
+    camera: openCameraDetail };
   if (id != null && Object.hasOwn(openers, kind)) return openers[kind](id);
 }
 
@@ -525,6 +531,125 @@ function subTable(title, cols, rows) {
   return frag;
 }
 
+function cameraBattery(value, camera) {
+  return value == null ? '—' : `${value}%${camera.isCharging ? ' ⚡' : ''}`;
+}
+
+TABS.cameras = {
+  async load() {
+    renderFilters([{ name: 'userId', label: '유저 ID', type: 'number' }]);
+    const filters = S.filters;
+    const data = await api(`/admin/cameras?${listQuery()}`);
+    if (S.tab !== 'cameras' || S.filters !== filters) return;
+    renderTable([
+      { key: 'id', label: 'ID' }, { key: 'name', label: '이름' },
+      { key: 'userId', label: '유저', link: 'user', linkLabel: userChipLabel },
+      { key: 'status', label: '상태', badgeKind: 'connection' },
+      { key: 'lastHeartbeatAt', label: '마지막 하트비트', fmt: fmtDate },
+      { key: 'batteryLevel', label: '배터리', fmt: cameraBattery },
+      { key: 'networkQuality', label: '네트워크' }, { key: 'modelName', label: '기기' },
+      { key: 'appVersion', label: '앱 버전' },
+      { key: 'pairedAt', label: '페어링 시각', fmt: fmtDate },
+      { key: 'unpairedAt', label: '해제 시각', fmt: fmtDate },
+    ], data.items, (camera) => openCameraDetail(camera.id));
+    renderPager(data, movePage);
+  },
+};
+
+async function openCameraDetail(cameraId) {
+  const data = await detailData(`/admin/cameras/${cameraId}`);
+  if (!data) return;
+  const camera = data.camera;
+  const box = detailNode('camera', camera.id);
+  const links = el('div', null, 'jump-row');
+  const events = el('button', '이 카메라 이벤트 보기', 'btn btn-sm');
+  events.addEventListener('click', () => switchTab('events', { cameraId: camera.id }));
+  links.append(idChip('user', camera.userId, userChipLabel(camera)),
+    detailBadge(camera.status, 'connection'), events);
+  box.append(el('h2', `카메라 #${camera.id} — ${camera.name ?? '—'}`), links);
+  if (camera.status !== 'ONLINE') {
+    box.append(el('p', '배터리·네트워크 등은 마지막으로 알려진 값. UNKNOWN은 하트비트 수신 전 또는 페어링 해제 상태.', 'muted'));
+  }
+  box.append(el('h2', '현재 상태'), dl([
+    ['마지막 하트비트', fmtDate(camera.lastHeartbeatAt)], ['연결 시작', fmtDate(camera.connectedSince)],
+    ['배터리', cameraBattery(camera.batteryLevel, camera)], ['충전 여부', booleanText(camera.isCharging)],
+    ['네트워크', camera.networkQuality], ['발열', camera.thermalState],
+  ]), el('h2', '기기 정보'), dl([
+    ['모델', camera.modelName], ['OS', camera.osVersion], ['앱 버전', camera.appVersion],
+    ['페어링', fmtDate(camera.pairedAt)], ['해제', fmtDate(camera.unpairedAt)],
+  ]), subTable('접속 기록 (최근 50개)', [
+    { key: 'startedAt', label: '시작', fmt: fmtDate },
+    { key: 'endedAt', label: '종료', fmt: (value) => value ? fmtDate(value) : camera.status === 'ONLINE'
+      ? '진행 중' : `끊김 — 종료 시각 미기록 (마지막 하트비트 ${fmtDate(camera.lastHeartbeatAt)})` },
+    { key: 'durationMinutes', label: '길이(분)' },
+    { key: 'disconnectReason', label: '끊긴 이유', fmt: (value) => ({
+      MANUAL: '직접 종료', BATTERY: '배터리 부족', WIFI_LOST: '와이파이 끊김',
+      TIMEOUT: '응답 시간 초과', APP_KILLED: '앱 종료', UNKNOWN: '알 수 없음',
+    })[value] ?? value },
+  ], data.connectionLogs || []));
+  openDialog(box);
+}
+
+TABS.stats = {
+  async load() {
+    const days = Number(S.filters.days) || 14;
+    const filters = S.filters;
+    const select = el('select');
+    select.setAttribute('aria-label', '일수');
+    for (const value of [7, 14, 30, 90]) select.append(selectOption(`${value}일`, value, value === days));
+    select.addEventListener('change', () => {
+      S.filters = { days: select.value };
+      TABS.stats.load().catch(() => {});
+    });
+    document.getElementById('filters').replaceChildren(el('span', '일수'), select);
+    document.getElementById('pager').replaceChildren();
+    const data = await api(`/admin/stats?days=${days}`);
+    if (S.tab !== 'stats' || S.filters !== filters) return;
+    const wrap = document.getElementById('table-wrap');
+    wrap.replaceChildren();
+    const u = data.users, c = data.cameras, a = data.activity;
+    const number = (value) => value == null ? '—' : value.toLocaleString('ko-KR');
+    for (const [title, entries] of [
+      ['유저', [
+        ['전체', u.total], ['오늘 가입', u.newToday], ['7일 가입', u.new7d],
+        ['활성 24시간', u.active1d], ['활성 7일', u.active7d], ['활성 30일', u.active30d],
+        ['iOS', u.ios], ['Android', u.android], ['미확인', u.platformUnknown],
+        ['정지', u.suspended], ['탈퇴', u.withdrawn],
+      ]],
+      ['카메라', [
+        ['페어링 중', c.paired], ['지금 온라인', `${number(c.online)} / ${number(c.paired)}`],
+        ['카메라 보유 유저', c.usersWithCamera], ['오늘 페어링', c.pairedToday], ['7일 페어링', c.paired7d],
+      ]],
+      ['최근 7일', [
+        ['오늘 이벤트', a.eventsToday], ['7일 이벤트', a.events7d], ['분석 실패', a.eventsFailed7d, true],
+        ['리포트 완료', a.reportsReady7d], ['리포트 실패', a.reportsFailed7d, true],
+        ['알림 발송', a.notificationsSent7d], ['알림 실패', a.notificationsFailed7d, true],
+      ]],
+    ]) {
+      const section = el('section', null, 'detail-section');
+      const cards = el('div', null, 'summary-cards');
+      for (const [label, value, failure] of entries) {
+        const card = el('div', null, 'summary-card');
+        card.append(el('span', number(value), `summary-num${failure && value > 0 ? ' badge-error' : ''}`), el('span', label, 'muted'));
+        cards.append(card);
+      }
+      section.append(el('h2', title), cards);
+      wrap.append(section);
+    }
+    wrap.append(el('p', '오늘: 한국 시간 0시부터 · 최근 7일: 지금부터 7×24시간 · 전체·활성 유저: 탈퇴 제외 · 페어링 중: 해제 제외', 'muted'),
+      el('h2', '날짜별 추이'),
+      el('p', '한국 날짜 기준 · 카메라 페어링: 이후 해제된 카메라 포함 · 리포트: 리포트 날짜 기준', 'muted'),
+      buildTable([
+        { key: 'date', label: '날짜' }, { key: 'newUsers', label: '신규 가입', fmt: number },
+        { key: 'cameraPairings', label: '카메라 페어링', fmt: number },
+        { key: 'events', label: '이벤트', fmt: number },
+        { key: 'eventsFailed', label: '분석 실패', fmt: number, badge: (row) => row.eventsFailed > 0 },
+        { key: 'reports', label: '리포트', fmt: number },
+        { key: 'notificationsFailed', label: '알림 실패', fmt: number, badge: (row) => row.notificationsFailed > 0 },
+      ], data.daily || []));
+  },
+};
+
 // ============ 유저 탭 ============
 const USER_STATUSES = ['ACTIVE', 'SUSPENDED', 'DELETED'];
 
@@ -563,6 +688,15 @@ async function openUserDetail(userId) {
     }
     if (request !== detailRequest) return;
   }
+  let cameras = u.cameras || [];
+  let camerasFailed = false;
+  try {
+    cameras = (await api(`/admin/cameras?userId=${userId}&size=100`)).items;
+  } catch {
+    camerasFailed = true;
+  }
+  // 추가 조회 중 다른 상세를 열었다면 이전 유저 화면으로 덮지 않는다.
+  if (request !== detailRequest) return;
   const frag = detailNode('user', u.id);
   frag.append(el('h2', `유저 #${u.id} — ${u.nickname}`));
   const jumps = el('div', null, 'jump-row');
@@ -583,10 +717,16 @@ async function openUserDetail(userId) {
     { key: 'imageUrl', label: '사진', img: true },
     { key: 'id', label: 'ID' }, { key: 'name', label: '이름' }, { key: 'breed', label: '견종' },
   ], u.dogs));
+  if (camerasFailed) frag.append(el('p', '카메라 상태 불러오지 못함 — 기존 카메라 정보 표시', 'muted'));
   frag.append(el('h2', '카메라'), buildTable([
     { key: 'id', label: 'ID' }, { key: 'name', label: '이름' },
     { key: 'pairedAt', label: '페어링', fmt: fmtDate },
-  ], u.cameras, { onRow: (camera) => switchTab('events', { cameraId: camera.id }) }));
+    { key: 'status', label: '상태', badgeKind: 'connection' },
+    { key: 'lastHeartbeatAt', label: '마지막 하트비트', fmt: fmtDate },
+    { key: 'batteryLevel', label: '배터리', fmt: cameraBattery },
+    { key: 'modelName', label: '기기' },
+    { key: 'unpairedAt', label: '해제', fmt: fmtDate },
+  ], cameras, { onRow: (camera) => openCameraDetail(camera.id) }));
 
   // 상태 변경
   const row = el('div', null, 'status-row');
@@ -662,7 +802,7 @@ TABS.feedbacks = {
       { key: 'sourceType', label: '소스' },
       { key: 'reasonCode', label: '사유' },
       { key: 'detail', label: '내용', trunc: true },
-      { key: 'reporterUserId', label: '신고자 ID', link: 'user' },
+      { key: 'reporterUserId', label: '신고자 ID', link: 'user', linkLabel: chipLabel('reporterUserId', 'reporterNickname') },
       { key: 'reporterNickname', label: '신고자' },
       { key: 'createdAt', label: '신고일', fmt: fmtDate },
     ], data.items, (row) => openFeedbackDetail(row.id));
@@ -676,7 +816,7 @@ async function openFeedbackDetail(feedbackId) {
   const frag = detailNode('feedback', f.id);
   frag.append(el('h2', `피드백 #${f.id}`));
   const links = el('div', null, 'jump-row');
-  links.append(idChip('event', f.eventId, `이벤트 #${f.eventId}`), idChip('user', f.reporterUserId, `#${f.reporterUserId} ${f.reporterNickname || ''}`));
+  links.append(idChip('event', f.eventId, `이벤트 #${f.eventId}`), idChip('user', f.reporterUserId, chipLabel('reporterUserId', 'reporterNickname')(f)));
   frag.append(links);
   frag.append(dl([
     ['이벤트 종류', `${f.eventCategory} (${f.sourceType})`],
@@ -713,7 +853,7 @@ TABS.inquiries = {
       { key: 'detail', label: '내용', trunc: true },
       { key: 'platform', label: '기기', fmt: (platform, row) => `${platform} · ${row.appVersion}` },
       { key: 'attachmentCount', label: '첨부' },
-      { key: 'reporterUserId', label: '신고자 ID', link: 'user' },
+      { key: 'reporterUserId', label: '신고자 ID', link: 'user', linkLabel: chipLabel('reporterUserId', 'reporterNickname') },
       { key: 'reporterNickname', label: '신고자' },
       { key: 'status', label: '상태' },
       { key: 'createdAt', label: '신고일', fmt: fmtDate },
@@ -759,7 +899,7 @@ async function openInquiryDetail(inquiryId) {
   const frag = detailNode('inquiry', q.id);
   frag.append(el('h2', `문제 신고 #${q.id}`));
   const links = el('div', null, 'jump-row');
-  links.append(idChip('user', q.reporterUserId, `#${q.reporterUserId} ${q.reporterNickname || ''}`));
+  links.append(idChip('user', q.reporterUserId, chipLabel('reporterUserId', 'reporterNickname')(q)));
   frag.append(links);
   frag.append(dl([
     ['유형', inquiryKindsText(q.kinds)],
@@ -791,8 +931,8 @@ TABS.events = {
     renderTable([
       { key: 'id', label: 'ID' },
       { key: 'detectedAt', label: '시각', fmt: fmtDate },
-      { key: 'cameraId', label: '카메라', link: 'cameraEvents' },
-      { key: 'userId', label: '유저', link: 'user' },
+      { key: 'cameraId', label: '카메라', link: 'camera' },
+      { key: 'userId', label: '유저', link: 'user', linkLabel: userChipLabel },
       { key: 'userNickname', label: '닉네임' },
       { key: 'dogName', label: '강아지' },
       { key: 'sourceType', label: '종류', fmt: (v, row) => `${v} / ${row.category}` },
@@ -836,6 +976,7 @@ async function reanalyzeEvents(ids, btn) {
 TABS.analyses = {
   async load() {
     renderFilters([
+      { name: 'userId', label: '유저 ID', type: 'number' },
       { name: 'severity', label: '심각도', type: 'select', options: ['LOW', 'MEDIUM', 'HIGH'] },
       { name: 'from', label: '시작일', type: 'date' },
       { name: 'to', label: '종료일', type: 'date' },
@@ -844,6 +985,8 @@ TABS.analyses = {
     renderTable([
       { key: 'id', label: 'ID' },
       { key: 'eventId', label: '이벤트', link: 'event' },
+      { key: 'userId', label: '유저', link: 'user', linkLabel: userChipLabel },
+      { key: 'dogName', label: '강아지' },
       { key: 'clipId', label: '클립' },
       { key: 'modelName', label: '모델' },
       { key: 'promptVersion', label: '프롬프트' },
@@ -882,7 +1025,7 @@ TABS.notifications = {
     const data = await api(`/admin/notification-logs/${notifSub}?${listQuery()}`);
     renderTable([
       { key: 'id', label: 'ID' },
-      { key: 'userId', label: '유저', link: 'user' },
+      { key: 'userId', label: '유저', link: 'user', linkLabel: userChipLabel },
       { key: notifSub === 'reports' ? 'reportId' : 'eventId', label: notifSub === 'reports' ? '리포트' : '이벤트', link: notifSub === 'reports' ? 'report' : 'event' },
       { key: 'channel', label: '채널' },
       { key: 'title', label: '제목', trunc: true },
@@ -1280,7 +1423,7 @@ function analysisCard(analysis) {
 
 function notificationTable(logs) {
   return subTable('알림 로그', [
-    { key: 'id', label: 'ID' }, { key: 'userId', label: '유저', link: 'user' },
+    { key: 'id', label: 'ID' }, { key: 'userId', label: '유저', link: 'user', linkLabel: userChipLabel },
     { key: 'channel', label: '채널' }, { key: 'title', label: '제목' },
     { key: 'body', label: '내용' }, { key: 'status', label: '상태' },
     { key: 'failReason', label: '실패 사유' }, { key: 'sentAt', label: '발송 시각', fmt: fmtDate },
@@ -1294,8 +1437,8 @@ async function openEventDetail(eventId) {
   const box = detailNode('event', event.id);
   box.append(el('h2', `이벤트 #${event.id} — ${event.category || '—'} (${event.sourceType || '—'})`));
   const links = el('div', null, 'jump-row');
-  links.append(idChip('user', event.userId, `#${event.userId} ${event.userNickname || ''}`),
-    idChip('cameraEvents', event.cameraId, `카메라 #${event.cameraId} ${event.cameraName || ''}`),
+  links.append(idChip('user', event.userId, userChipLabel(event)),
+    idChip('camera', event.cameraId, `카메라 #${event.cameraId} ${event.cameraName || ''}`),
     el('span', `강아지: ${event.dogName || '—'}`), detailBadge(event.status, 'status'));
   if (event.reanalyzedAt) links.append(el('span', `수동 재분석 ${fmtDate(event.reanalyzedAt)}`, 'badge'));
   box.append(links, eventPipeline(event), dl([
@@ -1305,7 +1448,7 @@ async function openEventDetail(eventId) {
   const reports = el('section', null, 'detail-section detail-table');
   reports.append(el('h2', '신고'), buildTable([
     { key: 'id', label: '신고', link: 'feedback' }, { key: 'reasonCode', label: '사유' },
-    { key: 'detail', label: '내용' }, { key: 'reporterUserId', label: '신고자', link: 'user' },
+    { key: 'detail', label: '내용' }, { key: 'reporterUserId', label: '신고자', link: 'user', linkLabel: chipLabel('reporterUserId', 'reporterNickname') },
     { key: 'reporterNickname', label: '닉네임' }, { key: 'createdAt', label: '신고 시각', fmt: fmtDate },
   ], event.feedbacks || [], { onRow: (feedback) => openFeedbackDetail(feedback.id), emptyText: '없음' }));
   box.append(reports, notificationTable(event.notificationLogs));
@@ -1318,7 +1461,7 @@ async function openReportDetail(reportId) {
   const box = detailNode('report', report.id);
   box.append(el('h2', `리포트 #${report.id}`));
   const links = el('div', null, 'jump-row');
-  links.append(idChip('user', report.userId, `#${report.userId} ${report.userNickname || ''}`),
+  links.append(idChip('user', report.userId, userChipLabel(report)),
     el('span', `강아지: ${report.dogName || '—'}`), el('span', report.reportDate || '—'), detailBadge(report.status, 'status'));
   box.append(links);
   for (const [title, text] of [['제목', report.headline], ['요약', report.summaryText], ['돌봄 안내', report.careSuggestion]]) {
@@ -1327,6 +1470,20 @@ async function openReportDetail(reportId) {
   box.append(subTable('지표', [
     { key: 'metricType', label: '종류' }, { key: 'metricValue', label: '값' }, { key: 'delta', label: '변화량' },
   ], report.metrics || []));
+  const events = report.events || [];
+  const eventSection = el('section', null, 'detail-table');
+  const countNote = report.eventCount != null && report.eventCount !== events.length
+    ? ` · 생성 당시 이벤트 수 ${report.eventCount}건과 현재 목록 ${events.length}건이 다름` : '';
+  eventSection.append(el('h2', `참고한 이벤트 (${events.length}건)`),
+    el('p', `관찰 구간 ${fmtDate(report.observingSince)} ~ ${fmtDate(report.scheduledAt)} (종료 시각 제외)의 이벤트를 다시 조회한 목록. 리포트 생성 뒤 늦게 올라온 이벤트가 포함될 수 있음${countNote}`, 'muted'),
+    buildTable([
+      { key: 'id', label: '이벤트', link: 'event' },
+      { key: 'detectedAt', label: '감지 시각', fmt: fmtDate },
+      { key: 'sourceType', label: '종류', fmt: (v, row) => `${v ?? '—'} / ${row.category ?? '—'}` },
+      { key: 'status', label: '상태' }, { key: 'verdict', label: '판정' },
+      { key: 'severity', label: '심각도' }, { key: 'summary', label: '요약', trunc: true },
+    ], events, { onRow: (event) => openEventDetail(event.id), emptyText: '없음' }));
+  box.append(eventSection);
   box.append(el('h2', '생성 정보'), dl([
     ['모델', report.modelName], ['프롬프트 버전', report.promptVersion],
     ['연결 끊김(분)', report.offlineMinutes], ['이벤트 수', report.eventCount], ['생성 시도 횟수', report.generationAttempts],
