@@ -74,9 +74,9 @@ dialog video { display: block; width: 100%; max-height: 420px; border-radius: 10
 .clip-note { font-size: 12px; margin-top: 8px; line-height: 1.6; }
 .analysis-card { padding: 18px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
 .badge { display: inline-block; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; font-weight: 700; }
-.badge-sev-low, .badge-status-pending, .badge-status-not_scheduled { color: var(--sub); background: #f0eeeb; }
+.badge-connection-unknown, .badge-sev-low, .badge-status-pending, .badge-status-not_scheduled { color: var(--sub); background: #f0eeeb; }
 .badge-sev-medium, .badge-status-detected, .badge-status-uploaded { color: #915018; background: #fff0dd; border-color: #e6c5a0; }
-.badge-sev-high, .badge-status-failed { color: var(--bad); background: #fff0ed; border-color: var(--bad); }
+.badge-connection-offline, .badge-sev-high, .badge-status-failed { color: var(--bad); background: #fff0ed; border-color: var(--bad); }
 .badge-status-ready, .badge-status-analyzed { color: var(--accent); background: #f8f3ec; border-color: var(--accent); }
 .pipeline-box { margin: 20px 0; }
 .pipeline { display: flex; list-style: none; gap: 16px; }
@@ -121,3 +121,5 @@ details > pre { max-height: 280px; overflow: auto; padding: 12px; margin-top: 8p
 .conflict-col h3 { font-size: 13px; margin-bottom: 8px; }
 .conflict-col dl { grid-template-columns: 90px minmax(0, 1fr); margin-bottom: 0; }
 @media (max-width: 540px) { .conflict-cols { grid-template-columns: 1fr; } }
+
+.badge-connection-online { color: #38734b; background: #edf5ee; border-color: #38734b; }
