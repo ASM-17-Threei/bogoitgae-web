@@ -196,6 +196,7 @@ async function api(path, opts = {}, retried = false) {
     showView('forbidden');
     throw new Error('권한 없음');
   }
+  if (res.status === 204) return null;
   const body = await res.json();
   if (!body.success) {
     toast(errorMessages[`${res.status}:${body.error.code}`] || `${body.error.code}: ${body.error.message}`, true);
@@ -630,6 +631,298 @@ TABS.stats = {
   },
 };
 
+// ============ 앱 버전 탭 ============
+function versionBelow(version, target) {
+  if (!/^\d+\.\d+\.\d+$/.test(version) || !/^\d+\.\d+\.\d+$/.test(target)) return false;
+  const a = version.split('.').map(BigInt), b = target.split('.').map(BigInt);
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] < b[i];
+  }
+  return false;
+}
+
+let appVersionsRequest = 0;
+
+TABS.appVersions = {
+  async load() {
+    const request = ++appVersionsRequest;
+    const filters = S.filters;
+    document.getElementById('filters').replaceChildren();
+    document.getElementById('pager').replaceChildren();
+    const data = await api('/admin/app-versions');
+    if (S.tab !== 'appVersions' || S.filters !== filters || request !== appVersionsRequest) return;
+    const wrap = document.getElementById('table-wrap');
+    wrap.replaceChildren();
+    for (const platform of ['ANDROID', 'IOS']) {
+      const policy = data.policies.find((row) => row.platform === platform);
+      if (!policy) continue;
+      const os = fmtPlatform(platform);
+      const rows = data.distribution.filter((row) => row.platform === platform);
+      const section = el('section', null, 'version-card');
+      const form = el('form', null, 'version-form');
+      const min = el('input'), latest = el('input');
+      for (const input of [min, latest]) {
+        input.required = true;
+        input.pattern = '\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}';
+        input.placeholder = '1.6.0';
+      }
+      min.value = policy.minVersion;
+      latest.value = policy.latestVersion;
+      const store = el('input');
+      store.type = 'url';
+      store.placeholder = platform === 'ANDROID' ? 'https://play.google.com/store/apps/…' : 'https://apps.apple.com/…';
+      store.value = policy.storeUrl || '';
+      const message = el('input');
+      message.maxLength = 500;
+      message.placeholder = '예: 더 안정적인 새 버전이 나왔어요';
+      message.value = policy.message || '';
+      for (const [label, input, help] of [
+        ['최소 버전 (강제)', min, '이 버전보다 낮으면 앱을 쓸 수 없어요'],
+        ['최신 버전 (권장)', latest, '이 버전보다 낮으면 업데이트를 권해요'],
+        ['스토어 주소', store, '비우면 이 OS의 업데이트 안내가 꺼져요'],
+        ['안내 문구', message, '비우면 앱의 기본 안내 문구를 사용해요'],
+      ]) {
+        const field = el('label', null, `policy-field${input === store || input === message ? ' field-wide' : ''}`);
+        field.append(el('span', label));
+        const hint = el('small', help, 'muted');
+        hint.id = `version-${platform}-${input === min ? 'min' : input === latest ? 'latest' : input === store ? 'store' : 'message'}-help`;
+        input.setAttribute('aria-describedby', hint.id);
+        input.setAttribute('aria-label', label);
+        field.append(input, hint);
+        form.append(field);
+      }
+      const save = el('button', '저장', 'btn btn-sm btn-primary');
+      save.type = 'submit';
+      const footer = el('div', null, 'version-footer field-wide');
+      footer.append(el('span', `마지막 저장: ${fmtDate(policy.updatedAt)}`, 'muted'), save);
+      form.append(footer);
+      const forced = rows.reduce((sum, row) => sum + (versionBelow(row.appVersion, policy.minVersion) ? row.users : 0), 0);
+      const recommended = rows.reduce((sum, row) => sum + (versionBelow(row.appVersion, policy.latestVersion)
+        && !versionBelow(row.appVersion, policy.minVersion) ? row.users : 0), 0);
+      const header = el('div', null, 'version-header');
+      header.append(el('h2', os), el('span', policy.storeUrl ? '안내 켜짐' : '안내 꺼짐',
+        `badge ${policy.storeUrl ? 'badge-status-ready' : 'badge-status-pending'}`));
+      const effect = el('div', null, `version-effect${!policy.storeUrl ? ' is-off' : forced > 0 ? ' is-warning' : ''}`);
+      effect.append(el('strong', !policy.storeUrl ? '업데이트 안내가 꺼져 있어요'
+        : forced > 0 ? `강제 업데이트 대상 ${forced.toLocaleString('ko-KR')}명` : '강제 업데이트 대상이 없어요'),
+      el('p', !policy.storeUrl ? '스토어 주소가 비어 있어 이 OS에는 업데이트를 안내하지 않아요.'
+        : forced > 0 ? `대상 사용자는 업데이트해야 앱을 쓸 수 있어요.${recommended >= 1 ? ` ${recommended.toLocaleString('ko-KR')}명에게는 업데이트를 권해요.` : ''}`
+          : `현재 업데이트 없이 앱을 계속 쓸 수 있어요.${recommended >= 1 ? ` ${recommended.toLocaleString('ko-KR')}명에게는 업데이트를 권해요.` : ''}`));
+      section.append(header, effect, form);
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (save.disabled) return;
+        const body = { minVersion: min.value.trim(), latestVersion: latest.value.trim(), storeUrl: store.value.trim(), message: message.value.trim() || null };
+        if (versionBelow(body.latestVersion, body.minVersion)) return toast('최신 버전은 최소 버전보다 낮을 수 없어요', true);
+        if (body.storeUrl && (!body.storeUrl.startsWith('https://') || !safeHttpUrl(body.storeUrl))) return toast('스토어 주소는 https://로 시작하는 올바른 주소를 입력해 주세요', true);
+        const count = rows.reduce((sum, row) => sum + (versionBelow(row.appVersion, body.minVersion) ? row.users : 0), 0);
+        const warning = !body.storeUrl ? '스토어 주소가 비어 있어 업데이트 안내가 꺼져요'
+          : count > 0 ? `이 값이면 현재 ${os} 사용자 ${count.toLocaleString('ko-KR')}명이 강제 업데이트 대상이에요 (앱을 쓸 수 없게 됩니다)`
+            : '현재 강제 업데이트 대상 사용자는 없어요';
+        if (!confirm(`[${environment}] ${os} 최소 버전 ${body.minVersion}, 최신 버전 ${body.latestVersion}으로 저장할까요?\n${warning}`)) return;
+        save.disabled = true;
+        try {
+          await api(`/admin/app-versions/${platform}`, { method: 'PUT', body: JSON.stringify(body) });
+          if (S.tab !== 'appVersions' || S.filters !== filters || !section.isConnected) return;
+        } catch (e) {
+          save.disabled = false;
+          if (S.tab !== 'appVersions' || S.filters !== filters || !section.isConnected) return;
+          if (!e.reported) toast(e.message, true);
+          return;
+        }
+        toast('저장했어요');
+        save.disabled = false;
+        TABS.appVersions.load().catch((e) => { if (!e.reported) toast(e.message, true); });
+      });
+      wrap.append(section);
+    }
+    const total = data.distribution.reduce((sum, row) => sum + row.users, 0);
+    const distribution = el('section', null, 'version-card version-distribution');
+    distribution.append(el('h2', '버전 분포'), buildTable([
+      { key: 'platform', label: 'OS', fmt: (v) => v == null ? '미확인' : fmtPlatform(v) },
+      { key: 'appVersion', label: '앱 버전', fmt: (v) => v ?? '알 수 없음' },
+      { key: 'users', label: '사용자 수', fmt: (v) => v.toLocaleString('ko-KR') },
+      { key: 'users', label: '비율', fmt: (v) => `${(total ? v / total * 100 : 0).toFixed(1)}%` },
+    ], data.distribution), el('p', '앱 버전은 로그인하거나 로그인 정보를 갱신할 때 기록돼요. 이 기능이 없는 예전 앱을 쓰는 사용자는 알 수 없음으로 보여요.', 'muted'));
+    distribution.querySelectorAll('tbody tr').forEach((tr, index) => {
+      const row = data.distribution[index];
+      if (!row) return;
+      const percent = total ? row.users / total * 100 : 0;
+      const ratio = el('div', null, 'version-ratio');
+      const track = el('span', null, 'version-ratio-track');
+      track.setAttribute('aria-hidden', 'true');
+      const fill = el('span');
+      fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+      track.append(fill);
+      ratio.append(track, el('span', `${percent.toFixed(1)}%`));
+      tr.cells[3].replaceChildren(ratio);
+    });
+    wrap.append(distribution);
+  },
+};
+
+// ============ 공지 탭 ============
+let noticesRequest = 0;
+
+TABS.notices = {
+  async load() {
+    const request = ++noticesRequest;
+    const filters = S.filters;
+    const page = S.page;
+    const create = el('button', '새 공지', 'btn btn-sm btn-primary');
+    create.addEventListener('click', () => openNoticeDetail());
+    document.getElementById('filters').replaceChildren(create);
+    const data = await api(`/admin/notices?${listQuery()}`);
+    if (S.tab !== 'notices' || S.filters !== filters || S.page !== page || request !== noticesRequest) return;
+    // 다른 페이지는 조회하지 않으므로 첫 페이지에 표시 대상이 있을 때만 구분할 수 있다.
+    const winner = page === 0 ? data.items.filter((row) => row.active).sort((a, b) =>
+      new Date(b.startsAt) - new Date(a.startsAt) || b.id - a.id)[0] : null;
+    const now = Date.now();
+    renderTable([
+      { key: 'id', label: 'ID' },
+      { key: 'active', label: '상태', fmt: (v, row) => v ? row.id === winner?.id ? '노출 중 · 앱에 표시' : '노출 중'
+        : new Date(row.startsAt).getTime() > now && (!row.endsAt || new Date(row.endsAt).getTime() > now) ? '예약' : '종료' },
+      { key: 'title', label: '제목' },
+      { key: 'platform', label: '대상 OS', fmt: (v) => v == null ? '전체' : fmtPlatform(v) },
+      { key: 'startsAt', label: '시작', fmt: fmtDate },
+      { key: 'endsAt', label: '종료', fmt: (v) => v ? fmtDate(v) : '계속' },
+      { key: 'createdAt', label: '등록', fmt: fmtDate },
+    ], data.items, (row) => openNoticeDetail(row));
+    document.querySelectorAll('#table-wrap tbody tr').forEach((tr, index) => {
+      const row = data.items[index];
+      if (!row) return;
+      const scheduled = new Date(row.startsAt).getTime() > now && (!row.endsAt || new Date(row.endsAt).getTime() > now);
+      const badges = el('div', null, 'notice-badges');
+      badges.append(el('span', row.active ? '노출 중' : scheduled ? '예약' : '종료',
+        `badge ${row.active ? 'badge-connection-online' : scheduled ? 'badge-status-ready' : 'badge-status-pending'}`));
+      if (row.active && row.id === winner?.id) badges.append(el('span', '앱에 표시', 'badge notice-visible-badge'));
+      tr.cells[1].replaceChildren(badges);
+    });
+    document.getElementById('table-wrap').append(el('p', '앱에는 노출 중인 공지 중 시작 시간이 가장 늦은 공지 하나만 보여요. 시작 시간이 같으면 ID가 큰 공지를 보여요.', 'muted'));
+    renderPager(data, movePage);
+  },
+};
+
+function openNoticeDetail(notice = null) {
+  const filters = S.filters;
+  const frag = el('div', null, 'notice-detail');
+  const form = el('form', null, 'notice-form');
+  const title = el('input');
+  title.required = true;
+  title.maxLength = 100;
+  title.value = notice?.title || '';
+  const body = el('textarea');
+  body.required = true;
+  body.maxLength = 2000;
+  body.rows = 6;
+  body.value = notice?.body || '';
+  const link = el('input');
+  link.type = 'url';
+  link.placeholder = 'https://…';
+  link.value = notice?.linkUrl || '';
+  const platform = el('select');
+  for (const [label, value] of [['전체', ''], ['안드로이드', 'ANDROID'], ['iOS', 'IOS']]) {
+    platform.append(selectOption(label, value, value === (notice?.platform || '')));
+  }
+  const start = el('input'), end = el('input');
+  start.type = end.type = 'datetime-local';
+  start.required = true;
+  start.value = localInputValue(notice ? new Date(notice.startsAt) : new Date());
+  end.value = notice?.endsAt ? localInputValue(new Date(notice.endsAt)) : '';
+  const titleCount = el('small', null, 'field-count muted');
+  const bodyCount = el('small', null, 'field-count muted');
+  for (const [label, input] of [['제목', title], ['본문', body], ['링크', link], ['대상 OS', platform], ['시작', start], ['종료', end]]) {
+    const field = el('label', null, `policy-field${[title, body, link].includes(input) ? ' field-wide' : ''}`);
+    input.setAttribute('aria-label', label);
+    field.append(el('span', label), input);
+    if (input === title) field.append(titleCount);
+    if (input === body) field.append(bodyCount);
+    form.append(field);
+  }
+  const save = el('button', '저장', 'btn btn-sm btn-primary');
+  save.type = 'submit';
+  const remove = el('button', '삭제', 'btn btn-sm notice-delete');
+  remove.type = 'button';
+  const actions = el('div', null, 'notice-actions field-wide');
+  if (notice) actions.append(remove);
+  actions.append(save);
+  form.append(actions);
+  const preview = el('section', null, 'notice-preview');
+  const previewTitle = el('strong', null, 'notice-preview-title');
+  const previewBody = el('p', null, 'notice-preview-body');
+  const previewLink = el('span', '자세히 보기', 'notice-preview-link');
+  const stage = el('div', null, 'notice-preview-stage');
+  const popup = el('div', null, 'notice-preview-popup');
+  const previewActions = el('div', null, 'notice-preview-actions');
+  previewActions.setAttribute('aria-hidden', 'true');
+  previewActions.append(el('span', '닫기'), el('span', '다시 보지 않기'));
+  popup.append(previewTitle, previewBody, previewLink, previewActions);
+  stage.append(popup);
+  preview.append(el('h2', '앱에서 보이는 모습'), stage);
+  const updatePreview = () => {
+    titleCount.textContent = `제목 ${title.value.length}/100`;
+    bodyCount.textContent = `본문 ${body.value.length}/2000`;
+    previewTitle.textContent = title.value || '제목을 입력해 주세요';
+    previewBody.textContent = body.value || '공지 내용을 입력하면 여기에 보여요';
+    previewTitle.classList.toggle('muted', !title.value);
+    previewBody.classList.toggle('muted', !body.value);
+    previewLink.hidden = !link.value.trim();
+  };
+  form.addEventListener('input', updatePreview);
+  updatePreview();
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (save.disabled) return;
+    const startsAt = new Date(start.value), endsAt = end.value ? new Date(end.value) : null;
+    if (Number.isNaN(startsAt.getTime()) || (endsAt && Number.isNaN(endsAt.getTime()))) return toast('시작과 종료 시간을 확인해 주세요', true);
+    if (endsAt && endsAt <= startsAt) return toast('종료 시간은 시작 시간보다 뒤여야 해요', true);
+    const linkUrl = link.value.trim();
+    if (linkUrl && (!linkUrl.startsWith('https://') || !safeHttpUrl(linkUrl))) return toast('링크는 https://로 시작하는 올바른 주소를 입력해 주세요', true);
+    if (!title.value.trim() || !body.value.trim()) return toast('제목과 본문을 입력해 주세요', true);
+    const payload = {
+      title: title.value.trim(), body: body.value.trim(), linkUrl: linkUrl || null, platform: platform.value || null,
+      startsAt: startsAt.toISOString(), endsAt: endsAt ? endsAt.toISOString() : null,
+    };
+    if (!confirm(`[${environment}] 공지 "${payload.title}"를 저장할까요?\n표시 기간: ${fmtDate(payload.startsAt)} ~ ${payload.endsAt ? fmtDate(payload.endsAt) : '계속'}`)) return;
+    save.disabled = remove.disabled = true;
+    try {
+      await api(notice ? `/admin/notices/${notice.id}` : '/admin/notices', {
+        method: notice ? 'PUT' : 'POST', body: JSON.stringify(payload),
+      });
+      if (S.tab !== 'notices' || S.filters !== filters || currentDetail?.node !== frag) return;
+    } catch (e) {
+      save.disabled = remove.disabled = false;
+      if (S.tab !== 'notices' || S.filters !== filters || currentDetail?.node !== frag) return;
+      if (!e.reported) toast(e.message, true);
+      return;
+    }
+    toast('저장했어요');
+    closeDetail();
+    TABS.notices.load().catch((e) => { if (!e.reported) toast(e.message, true); });
+  });
+  remove.addEventListener('click', async () => {
+    if (remove.disabled || !notice) return;
+    if (!confirm(`[${environment}] 공지 "${notice.title}"를 삭제할까요?\n표시 기간: ${fmtDate(notice.startsAt)} ~ ${notice.endsAt ? fmtDate(notice.endsAt) : '계속'}`)) return;
+    save.disabled = remove.disabled = true;
+    try {
+      await api(`/admin/notices/${notice.id}`, { method: 'DELETE' });
+      if (S.tab !== 'notices' || S.filters !== filters || currentDetail?.node !== frag) return;
+    } catch (e) {
+      save.disabled = remove.disabled = false;
+      if (S.tab !== 'notices' || S.filters !== filters || currentDetail?.node !== frag) return;
+      if (!e.reported) toast(e.message, true);
+      return;
+    }
+    toast('삭제했어요');
+    closeDetail();
+    TABS.notices.load().catch((e) => { if (!e.reported) toast(e.message, true); });
+  });
+  const columns = el('div', null, 'notice-columns');
+  columns.append(form, preview);
+  frag.append(el('h2', notice ? `공지 #${notice.id}` : '새 공지'), columns);
+  openDialog(frag);
+}
+
 // ============ 유저 탭 ============
 const USER_STATUSES = ['ACTIVE', 'SUSPENDED', 'DELETED'];
 
@@ -645,6 +938,7 @@ TABS.users = {
       { key: 'nickname', label: '닉네임' },
       { key: 'provider', label: '가입경로' },
       { key: 'platform', label: 'OS', fmt: fmtPlatform },
+      { key: 'appVersion', label: '앱 버전' },
       { key: 'status', label: '상태' },
       { key: 'role', label: '역할' },
       { key: 'createdAt', label: '가입일', fmt: fmtDate },
@@ -690,7 +984,7 @@ async function openUserDetail(userId) {
   }
   frag.append(jumps);
   frag.append(dl([
-    ['가입경로', u.provider], ['OS', fmtPlatform(u.platform)], ['상태', u.status], ['역할', u.role],
+    ['가입경로', u.provider], ['OS', fmtPlatform(u.platform)], ['앱 버전', u.appVersion || '—'], ['상태', u.status], ['역할', u.role],
     ['가입일', fmtDate(u.createdAt)],
   ]));
   frag.append(subTable('강아지', [
