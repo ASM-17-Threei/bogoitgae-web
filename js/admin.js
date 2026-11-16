@@ -315,6 +315,8 @@ function adminSelfCheck() {
   console.assert(inquiryKindsText(null) === '—', '유형 없음 처리 실패');
   console.assert(inquiryAttachmentNode({ type: 'PHOTO', url: 'javascript:alert(1)', expired: false }).querySelector('img') === null, '위험한 사진 URL 차단 실패');
   console.assert(inquiryAttachmentNode({ type: 'CLIP', clipId: 5, url: null, expired: true }).textContent.includes('보관 기한'), '만료 클립 표시 실패');
+  const liveClip = inquiryAttachmentNode({ type: 'CLIP', clipId: 5, url: 'https://x.com/a.mp4', expired: false });
+  console.assert(liveClip.textContent.includes('있음') && liveClip.querySelector('video') === null, '클립은 있는지만 — 플레이어 금지');
   for (const hash of ['#event/no', '#event/0', '#cam/3', '#user/1/2', '#report/-1', '#feedback/1.5']) {
     console.assert(parseHash(hash) === null, '잘못된 상세 주소 차단 실패');
   }
@@ -418,7 +420,6 @@ function resetDetail() {
   currentDetail = null;
   setDetailHash('');
   const body = document.getElementById('detail-body');
-  body.querySelectorAll('video').forEach((video) => video.pause());
   body.replaceChildren();
 }
 
@@ -442,7 +443,6 @@ function renderDetail() {
   const close = el('button', '닫기', 'btn btn-sm');
   close.addEventListener('click', closeDetail);
   bar.append(close);
-  body.querySelectorAll('video').forEach((video) => video.pause());
   body.replaceChildren(bar, currentDetail.node);
   setDetailHash(currentDetail.hash);
 }
@@ -497,26 +497,6 @@ function safeHttpUrl(str) {
   } catch {
     return null;
   }
-}
-
-function clipPlayer(url, poster) {
-  const box = el('div', null, 'clip-player');
-  const src = safeHttpUrl(url);
-  if (!src) {
-    box.append(el('p', '재생 주소가 없거나 올바르지 않습니다.', 'muted'));
-    return box;
-  }
-  const video = el('video');
-  video.controls = true;
-  video.preload = 'metadata';
-  video.playsInline = true;
-  video.src = src;
-  const thumbnail = safeHttpUrl(poster);
-  if (thumbnail) video.poster = thumbnail;
-  const note = el('p', '재생 URL은 5분 유효 — 만료되면 다시 열기', 'muted clip-note');
-  video.addEventListener('error', () => { note.textContent = '재생할 수 없습니다. 주소가 만료됐다면 상세 화면을 다시 여세요.'; });
-  box.append(video, note);
-  return box;
 }
 
 function dl(pairs) {
@@ -824,8 +804,8 @@ async function openFeedbackDetail(feedbackId) {
     ['감지 시각', fmtDate(f.detectedAt)],
     ['신고 사유', f.reasonCode], ['내용', f.detail],
     ['신고일', fmtDate(f.createdAt)],
+    ['클립', f.clipId == null ? '없음 또는 만료' : `있음 (#${f.clipId})`],
   ]));
-  frag.append(f.playbackUrl ? clipPlayer(f.playbackUrl, f.thumbnailUrl) : el('p', '클립 없음 또는 만료', 'muted'));
   openDialog(frag);
 }
 
@@ -862,8 +842,8 @@ TABS.inquiries = {
   },
 };
 
-// 첨부 한 건. 사진은 이미지로, 클립은 플레이어로 — 둘 다 presigned URL 이라 5분 뒤 만료된다.
-// 클립은 신고가 참조만 하므로 보관 기한(운영 24시간)이 지나면 url 이 null 이고 expired=true 다.
+// 첨부 한 건. 사진은 이미지로(presigned URL 이라 5분 뒤 만료), 클립은 있는지만 — 영상은 찍은 본인만 볼 수 있다.
+// 클립은 신고가 참조만 하므로 보관 기한(운영 24시간)이 지나면 expired=true 다.
 function inquiryAttachmentNode(attachment) {
   const box = el('figure', null, 'inquiry-attachment');
   if (attachment.type === 'PHOTO') {
@@ -885,11 +865,7 @@ function inquiryAttachmentNode(attachment) {
     box.append(link, el('figcaption', '사진 — 누르면 원본', 'muted'));
     return box;
   }
-  if (attachment.expired || !attachment.url) {
-    box.append(el('p', `클립 #${attachment.clipId} — 보관 기한이 지나 재생할 수 없습니다.`, 'muted'));
-    return box;
-  }
-  box.append(clipPlayer(attachment.url), el('figcaption', `클립 #${attachment.clipId}`, 'muted'));
+  box.append(el('p', `클립 #${attachment.clipId} — ${attachment.expired ? '보관 기한이 지나 삭제됨' : '있음'}`, 'muted'));
   return box;
 }
 
@@ -1393,7 +1369,7 @@ function eventClip(clip) {
     box.append(el('p', clip ? '클립 만료(삭제됨)' : '클립 없음(소리만 이벤트)', 'muted'));
     return box;
   }
-  box.append(clipPlayer(clip.playbackUrl, clip.thumbnailUrl));
+  box.append(el('p', `클립 있음 (#${clip.id})`));
   const size = clip.fileSizeBytes == null ? '—' : `${(clip.fileSizeBytes / (1024 * 1024)).toFixed(2)} MB`;
   box.append(el('p', `보호: ${booleanText(clip.isProtected)} · 만료 예정: ${fmtDate(clip.expiresAt)} · 파일 크기: ${size}`, 'muted clip-note'));
   return box;
