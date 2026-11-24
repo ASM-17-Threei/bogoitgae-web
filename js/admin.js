@@ -1244,11 +1244,12 @@ async function reanalyzeEvents(ids, btn) {
 
 // ============ 시연 탭 (AISW-473) ============
 // 발표에서 강아지 없이 알림·리포트를 보여주려고, 미리 S3 demo/ 에 올려 둔 영상 묶음을 시연 계정 카메라에 넣는다.
-// 서버 스위치(DEMO_ENABLED)가 꺼져 있으면 아무것도 못 한다. 켜도 허용된 카메라(DEMO_CAMERA_IDS)에만 들어간다.
+// 서버 스위치(DEMO_ENABLED)가 꺼져 있으면 아무것도 못 한다. 켜도 시연 계정(DEMO_USER_IDS)의 카메라에만 들어간다.
+// 계정 기준이라 시연 계정에 공기계를 페어링하고 새로고침하면 바로 카드가 생긴다.
 const demoLog = []; // 이번 페이지에서 누른 결과 — 탭을 다시 그려도 남긴다
 const DEMO_ERROR_MESSAGES = {
   '404:DEMO_DISABLED': '시연 모드가 꺼졌어요. 새로고침해 주세요',
-  '400:DEMO_CAMERA_NOT_ALLOWED': '시연용으로 등록된 카메라가 아니에요 (DEMO_CAMERA_IDS)',
+  '400:DEMO_CAMERA_NOT_ALLOWED': '시연 계정의 카메라가 아니에요 (DEMO_USER_IDS)',
   '409:DEMO_CAMERA_UNPAIRED': '해제된 카메라예요. 시연 폰을 다시 페어링해 주세요',
   '404:DEMO_PACK_NOT_FOUND': '영상 묶음을 찾을 수 없어요. S3 demo/ 를 확인해 주세요',
 };
@@ -1268,7 +1269,7 @@ TABS.demo = {
     if (!data.enabled) {
       const off = el('div', null, 'version-effect is-off');
       off.append(el('strong', '시연 모드가 꺼져 있어요'),
-        el('p', '서버 app.env 에 DEMO_ENABLED=true 와 DEMO_CAMERA_IDS 를 넣고 앱을 다시 띄워야 켜져요. 발표가 끝나면 다시 꺼 주세요.'));
+        el('p', '서버 app.env 에 DEMO_ENABLED=true 와 DEMO_USER_IDS(시연 계정 번호)를 넣고 앱을 다시 띄워야 켜져요. 발표가 끝나면 다시 꺼 주세요.'));
       wrap.append(off);
       return;
     }
@@ -1279,7 +1280,7 @@ TABS.demo = {
     wrap.append(warn);
 
     if (data.cameras.length === 0) {
-      wrap.append(el('p', 'DEMO_CAMERA_IDS 에 해당하는 카메라가 없어요.', 'muted'));
+      wrap.append(el('p', '시연 계정(DEMO_USER_IDS)에 페어링된 카메라가 없어요. 시연 계정으로 로그인한 폰에서 공기계를 페어링한 뒤 새로고침해 주세요.', 'muted'));
     }
     for (const camera of data.cameras) wrap.append(demoCameraCard(camera, data.packs));
 
