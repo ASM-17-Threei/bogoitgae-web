@@ -178,3 +178,6 @@ dialog:has(.notice-detail) { max-width: 1100px; color: var(--ink); background: v
   .version-ratio-track { flex: none; }
   .notice-preview-stage { min-height: 300px; }
 }
+
+/* 시연 탭 — 카드 안 동작 줄은 .filters 의 바깥 여백을 쓰지 않는다 */
+.demo-actions { padding: 0 0 10px; }

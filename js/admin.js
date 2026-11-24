@@ -1242,6 +1242,129 @@ async function reanalyzeEvents(ids, btn) {
   if (S.tab === 'events') TABS.events.load().catch(() => {});
 }
 
+// ============ 시연 탭 (AISW-473) ============
+// 발표에서 강아지 없이 알림·리포트를 보여주려고, 미리 S3 demo/ 에 올려 둔 영상 묶음을 시연 계정 카메라에 넣는다.
+// 서버 스위치(DEMO_ENABLED)가 꺼져 있으면 아무것도 못 한다. 켜도 허용된 카메라(DEMO_CAMERA_IDS)에만 들어간다.
+const demoLog = []; // 이번 페이지에서 누른 결과 — 탭을 다시 그려도 남긴다
+const DEMO_ERROR_MESSAGES = {
+  '404:DEMO_DISABLED': '시연 모드가 꺼졌어요. 새로고침해 주세요',
+  '400:DEMO_CAMERA_NOT_ALLOWED': '시연용으로 등록된 카메라가 아니에요 (DEMO_CAMERA_IDS)',
+  '409:DEMO_CAMERA_UNPAIRED': '해제된 카메라예요. 시연 폰을 다시 페어링해 주세요',
+  '404:DEMO_PACK_NOT_FOUND': '영상 묶음을 찾을 수 없어요. S3 demo/ 를 확인해 주세요',
+};
+
+TABS.demo = {
+  async load() {
+    const filters = S.filters;
+    const refresh = el('button', '새로고침', 'btn btn-sm');
+    refresh.addEventListener('click', () => TABS.demo.load().catch(() => {}));
+    document.getElementById('filters').replaceChildren(refresh);
+    document.getElementById('pager').replaceChildren();
+    const data = await api('/admin/demo');
+    if (S.tab !== 'demo' || S.filters !== filters) return;
+    const wrap = document.getElementById('table-wrap');
+    wrap.replaceChildren();
+
+    if (!data.enabled) {
+      const off = el('div', null, 'version-effect is-off');
+      off.append(el('strong', '시연 모드가 꺼져 있어요'),
+        el('p', '서버 app.env 에 DEMO_ENABLED=true 와 DEMO_CAMERA_IDS 를 넣고 앱을 다시 띄워야 켜져요. 발표가 끝나면 다시 꺼 주세요.'));
+      wrap.append(off);
+      return;
+    }
+
+    const warn = el('div', null, 'version-effect is-warning');
+    warn.append(el('strong', '시연 모드가 켜져 있어요'),
+      el('p', '여기서 넣은 이벤트와 리포트는 실제 데이터처럼 저장되고 알림도 실제로 가요. 발표가 끝나면 DEMO_ENABLED 를 꺼 주세요.'));
+    wrap.append(warn);
+
+    if (data.cameras.length === 0) {
+      wrap.append(el('p', 'DEMO_CAMERA_IDS 에 해당하는 카메라가 없어요.', 'muted'));
+    }
+    for (const camera of data.cameras) wrap.append(demoCameraCard(camera, data.packs));
+
+    if (demoLog.length > 0) {
+      wrap.append(subTable('이번에 넣은 것', [
+        { key: 'at', label: '시각', fmt: fmtDate },
+        { key: 'cameraId', label: '카메라', link: 'camera' },
+        { key: 'what', label: '내용' },
+        { key: 'eventId', label: '이벤트', link: 'event' },
+        { key: 'reportId', label: '리포트', link: 'report' },
+        { key: 'status', label: '상태' },
+      ], demoLog));
+    }
+  },
+};
+
+function demoCameraCard(camera, packs) {
+  const card = el('section', null, 'version-card');
+  const header = el('div', null, 'version-header');
+  const title = el('h2', `#${camera.cameraId} ${camera.name}`);
+  const owner = el('span', null, 'muted');
+  owner.append(`보호자 `, idChip('user', camera.userId, `#${camera.userId} ${camera.userNickname}`));
+  header.append(title, owner);
+  if (!camera.paired) header.append(el('span', '해제된 카메라 — 주입이 막혀요', 'badge badge-error'));
+  card.append(header);
+
+  const row = el('div', null, 'filters demo-actions');
+  const pack = el('select');
+  pack.setAttribute('aria-label', '영상 묶음');
+  for (const name of packs) pack.append(selectOption(name, name));
+  const inject = el('button', '이벤트 넣기', 'btn btn-sm btn-primary');
+  inject.disabled = packs.length === 0 || !camera.paired;
+  inject.addEventListener('click', () => injectDemoEvent(camera.cameraId, pack.value, inject));
+  const report = el('button', '오늘 리포트 지금 만들기', 'btn btn-sm');
+  report.addEventListener('click', () => regenerateDemoReport(camera.cameraId, report));
+  row.append(el('span', '영상'), pack, inject, report);
+  card.append(row);
+  if (packs.length === 0) card.append(el('p', 'S3 demo/ 아래에 clip.mp4 와 frames/ 가 둘 다 있는 묶음이 없어요.', 'muted'));
+  card.append(el('p', '알림은 VLM 판정이 HIGH 일 때만 가요. 푸시가 먼저 오고, 클립은 사람 가리기가 끝난 뒤(약 30초) 목록에 보여요. 리포트는 오늘 것이 있으면 지우고 다시 만들어 발송해요.', 'muted'));
+  return card;
+}
+
+async function injectDemoEvent(cameraId, pack, btn) {
+  btn.disabled = true;
+  try {
+    const data = await api(`/admin/demo/cameras/${cameraId}/events?pack=${encodeURIComponent(pack)}`, {
+      method: 'POST',
+      errorMessages: DEMO_ERROR_MESSAGES,
+    });
+    demoLog.unshift({ at: new Date().toISOString(), cameraId, what: `이벤트 · ${pack} · 프레임 ${data.frameCount}장`,
+      eventId: data.eventId, reportId: null, status: data.status });
+    toast(`#${data.eventId} 넣었어요 — 분석이 끝나면 이벤트 상세에서 결과가 보여요`);
+  } catch (e) {
+    if (!e.reported) toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+  if (S.tab === 'demo') TABS.demo.load().catch(() => {});
+}
+
+async function regenerateDemoReport(cameraId, btn) {
+  // 오늘 리포트를 지우고 다시 만드는 동작이라 한 번 더 누르게 한다 (브라우저 confirm 대신)
+  if (btn.dataset.armed !== 'true') {
+    btn.dataset.armed = 'true';
+    btn.textContent = '한 번 더 누르면 만들어요';
+    setTimeout(() => {
+      if (!btn.isConnected) return;
+      btn.dataset.armed = 'false';
+      btn.textContent = '오늘 리포트 지금 만들기';
+    }, 4000);
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = '만드는 중…';
+  try {
+    const data = await api(`/admin/demo/cameras/${cameraId}/report`, { method: 'POST', errorMessages: DEMO_ERROR_MESSAGES });
+    demoLog.unshift({ at: new Date().toISOString(), cameraId, what: data.replaced ? '리포트 · 다시 만듦' : '리포트 · 새로 만듦',
+      eventId: null, reportId: data.reportId, status: data.status });
+    toast(`리포트 #${data.reportId} ${data.status}`);
+  } catch (e) {
+    if (!e.reported) toast(e.message, true);
+  }
+  if (S.tab === 'demo') TABS.demo.load().catch(() => {});
+}
+
 // ============ 이벤트 분석 탭 ============
 TABS.analyses = {
   async load() {
